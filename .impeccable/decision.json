@@ -1,0 +1,93 @@
+{
+  "title": "為老邱自家烘焙選擇網站視覺方向",
+  "question": "Code-first 已選定。請選定新咖啡商店的視覺世界；可以重抽，也可採用熟悉的咖啡店購物網站類型。",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "剪輯工作台的選豆軌",
+      "kicker": "THE ROLL",
+      "lineage": "電影剪輯工作台上的穿孔選擇軌",
+      "thesis": "把每支咖啡豆當作一格有產地與處理資訊的原片，讓顧客沿著選豆軌挑出自己的烘焙清單。",
+      "palette": ["#171614", "#D87527", "#F1E7D1", "#93552E"],
+      "materials": ["粗粒底片橘", "穿孔膠片", "白色油墨記號"],
+      "viewport": "橘色穿孔選擇軌橫跨頁面，咖啡品項像一格格可選原片；固定購物列明示已選豆款、數量與結帳入口。",
+      "risk": "剪輯台與咖啡沒有天然關聯；若產品資訊不夠清楚，會像電影主題活動頁而不是可下單的商店。",
+      "comp": ".impeccable/mocks/decision/assigned.webp",
+      "wireframe": {"cols": 12, "rows": 10, "regions": [{"label":"店名與導覽", "x":0,"y":0,"w":12,"h":1}, {"label":"穿孔選豆軌", "x":0,"y":1,"w":12,"h":2,"accent":true}, {"label":"咖啡品項原片", "x":0,"y":3,"w":8,"h":6}, {"label":"購物清單與動作", "x":8,"y":3,"w":4,"h":6,"accent":true}, {"label":"下一段品項", "x":0,"y":9,"w":12,"h":1}]}
+    },
+    {
+      "id": "model-pick",
+      "label": "烘豆批次田野簿",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "產地採集簿與烘豆批次標籤的編目方式",
+      "thesis": "每支豆都是一筆可追溯的批次紀錄，顧客像翻閱田野簿一樣比較產地、處理法、烘焙與價格。",
+      "palette": ["#EAE3D1", "#263A31", "#A94F32", "#D3A64A"],
+      "materials": ["纖維紙標", "墨綠索引線", "烘焙批次印章"],
+      "viewport": "頂端是一張放大的本週烘焙批次索引，往下是可比較的豆款田野卡；每張卡保留產地資料欄、烘焙選擇與清晰的加入購物車動作。",
+      "risk": "若裝飾性田野標記太多，會拖慢快速比較；實際產地和處理資訊未到手前，不可補造批次細節。",
+      "comp": ".impeccable/mocks/decision/model-pick.webp",
+      "wireframe": {"cols": 12, "rows": 10, "regions": [{"label":"店名、目錄導覽", "x":0,"y":0,"w":12,"h":1}, {"label":"本週批次索引與選豆入口", "x":0,"y":1,"w":12,"h":3,"accent":true}, {"label":"產地批次田野卡", "x":0,"y":4,"w":8,"h":5}, {"label":"篩選、購物車", "x":8,"y":4,"w":4,"h":5,"accent":true}, {"label":"下一段內容", "x":0,"y":9,"w":12,"h":1}]}
+    },
+    {
+      "id": "graphic-worlds-publishing-ukiyoe-block-registration",
+      "label": "逐版套印的咖啡產地誌",
+      "verdict": "wins",
+      "lineage": "浮世繪木版畫的逐色套印與版面秩序",
+      "thesis": "讓每支豆像一張逐版印成的產地誌，產地、處理、風味與下單動作各有清楚位置。",
+      "palette": ["#E9D8B6", "#1D2730", "#355C78", "#B64A32"],
+      "materials": ["和紙纖維", "靛藍版色", "朱紅印記"],
+      "viewport": "頁面先以深色主版線建立閱讀秩序，再逐層顯出豆款、可核實的產地資訊及套印式購買印記；品項依序展開，保留明確價格與烘焙選項。",
+      "case": "比剪輯台方向更貼近咖啡產地與手工烘焙的內容語彙，同時可用固定版面清楚承載品項、價格與加入購物車動作。",
+      "risk": "若木刻紋理壓過字與控制項，會傷害可讀性；木版語彙應服務資料，不可把頁面做成只有裝飾的海報。",
+      "comp": ".impeccable/mocks/decision/challenger-ukiyoe.webp",
+      "hero": "https://impeccable.style/worlds/cards/graphic-worlds-publishing-ukiyoe-block-registration-hero.webp",
+      "wireframe": {"cols": 12, "rows": 10, "regions": [{"label":"印章式店名導覽", "x":0,"y":0,"w":12,"h":1}, {"label":"主版線／產地誌標題", "x":0,"y":1,"w":5,"h":3,"accent":true}, {"label":"主打咖啡批次與購買印記", "x":5,"y":1,"w":7,"h":3}, {"label":"逐版套印的豆款目錄", "x":0,"y":4,"w":8,"h":5}, {"label":"價格與選豆控制", "x":8,"y":4,"w":4,"h":5,"accent":true}, {"label":"續讀／下一段", "x":0,"y":9,"w":12,"h":1}]}
+    },
+    {
+      "id": "pop-culture-shelf-character-goods-catalog",
+      "label": "豆款角色名錄",
+      "verdict": "competitive",
+      "lineage": "角色周邊名錄的編號卡與人氣排序",
+      "thesis": "把每支豆當成一張容易掃讀的收藏名錄卡，讓比較和選擇非常直接。",
+      "palette": ["#F2E9DC", "#A9C7BA", "#E67B54", "#27312D"],
+      "materials": ["霧面色紙", "細白框線", "編號標籤"],
+      "viewport": "一目了然的編號豆款卡，卡上固定呈現真實商品名稱、規格、價格和加入購物車按鈕。",
+      "case": "商品目錄和購買動作容易辨識，但角色化和人氣排序缺乏咖啡商品證據與店家關聯。",
+      "risk": "易把真實咖啡商品卡通化，削弱產地與烘焙資訊。",
+      "kept": "保留一眼可掃讀的編號索引與緊湊商品摘要，不使用虛構角色或人氣數據。",
+      "comp": ".impeccable/mocks/decision/challenger-character-catalog.webp",
+      "hero": "https://impeccable.style/worlds/cards/pop-culture-shelf-character-goods-catalog-hero.webp",
+      "wireframe": {"cols": 12, "rows": 10, "regions": [{"label":"店名導覽", "x":0,"y":0,"w":12,"h":1}, {"label":"商品編號與篩選", "x":0,"y":1,"w":12,"h":2,"accent":true}, {"label":"豆款名錄卡與購物動作", "x":0,"y":3,"w":9,"h":6}, {"label":"購物車摘要", "x":9,"y":3,"w":3,"h":6,"accent":true}, {"label":"下一段", "x":0,"y":9,"w":12,"h":1}]}
+    },
+    {
+      "id": "textiles-weave-drape-fashion-industrial-quote-grammar",
+      "label": "烘焙標籤工業印刷",
+      "verdict": "competitive",
+      "lineage": "工業服飾吊牌與警示條紋的直白標記系統",
+      "thesis": "以清楚的吊牌式標籤把豆名、烘焙和價格放到最前面，不讓選購流程藏在裝飾裡。",
+      "palette": ["#F2F0E9", "#20201E", "#F0782E", "#B7B3A9"],
+      "materials": ["棉布白", "黑色尼龍", "安全橘吊牌"],
+      "viewport": "大字商品索引與橘色價格吊牌建立明確層級，品項卡直接放入烘焙選擇和加入購物車動作。",
+      "case": "清楚的商品標記有助下單，但街頭服飾和警示帶的世界與咖啡烘焙品牌關聯較弱。",
+      "risk": "斜紋和引號可能顯得像促銷標籤，喧賓奪主。",
+      "kept": "保留標籤式的資訊層級和醒目的選擇狀態，刪去安全條紋、虛構促銷和引號裝飾。",
+      "comp": ".impeccable/mocks/decision/challenger-industrial-labels.webp",
+      "hero": "https://impeccable.style/worlds/cards/textiles-weave-drape-fashion-industrial-quote-grammar-hero.webp",
+      "wireframe": {"cols": 12, "rows": 10, "regions": [{"label":"店名與導覽", "x":0,"y":0,"w":12,"h":1}, {"label":"商品索引吊牌", "x":0,"y":1,"w":12,"h":2,"accent":true}, {"label":"商品名錄", "x":0,"y":3,"w":8,"h":6}, {"label":"購物動作／數量", "x":8,"y":3,"w":4,"h":6,"accent":true}, {"label":"下一段", "x":0,"y":9,"w":12,"h":1}]}
+    }
+  ],
+  "reroll": {"registers": ["safer", "bolder"]},
+  "buildPath": {"value": "code", "toggle": true},
+  "canon": true,
+  "canonCard": {
+    "label": "熟悉的咖啡豆購物網站",
+    "thesis": "依顧客預期，以商品目錄、篩選器、商品卡和購物車完成下單。",
+    "palette": ["#F5F3EE", "#20211F", "#7C3F24"],
+    "materials": ["商品攝影", "中性色介面", "易讀商品標籤"],
+    "viewport": "簡潔導覽列、商品目錄、清楚的規格價格與購物車；按下加入後即時顯示購物車內容。",
+    "risk": "容易像其他咖啡豆電商；商品資訊和店家真實內容仍須供應。",
+    "comp": ".impeccable/mocks/decision/canon.webp",
+    "wireframe": {"cols": 12, "rows": 10, "regions": [{"label":"店名導覽", "x":0,"y":0,"w":12,"h":1}, {"label":"店家主標題與購物動作", "x":0,"y":1,"w":12,"h":2,"accent":true}, {"label":"商品篩選與列表", "x":0,"y":3,"w":9,"h":6}, {"label":"購物車摘要", "x":9,"y":3,"w":3,"h":6,"accent":true}, {"label":"下一段", "x":0,"y":9,"w":12,"h":1}]}
+  },
+  "steer": true
+}
