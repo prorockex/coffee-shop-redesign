@@ -1,15 +1,285 @@
-<!doctype html>
-<html lang="zh-Hant">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/coffee-mark.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f7f6f2" />
-    <meta name="description" content="老邱自家烘焙・咖啡豆選集。以紙雕咖啡枝葉為封面，依商品資料瀏覽產地、處理法與風味。本頁是預覽，尚不接受真實訂單。" />
-    <title>老邱自家烘焙｜咖啡豆選集</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>老邱自家烘焙 | 精選咖啡豆單</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700;900&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans TC', sans-serif; }
+    h1, h2, h3, .font-serif { font-family: 'Noto Serif TC', serif; }
+  </style>
+</head>
+<body class="bg-[#FBF9F5] text-stone-800 min-h-screen flex flex-col antialiased">
+
+  <!-- 頂部導航 (Google Sites 經典簡潔風格) -->
+  <header class="bg-white/90 backdrop-blur-md border-b border-stone-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3 cursor-pointer" onclick="window.scrollTo({top:0, behavior:'smooth'})">
+        <span class="text-2xl">☕</span>
+        <div>
+          <h1 class="text-lg sm:text-xl font-bold tracking-wide text-stone-900">老邱自家烘焙</h1>
+          <span class="text-[10px] text-stone-400 block -mt-1 tracking-widest font-mono">ROASTED COFFEE BEANS</span>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2">
+        <button onclick="loadProducts()" class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-medium transition active:scale-95">
+          <svg id="refresh-icon" class="w-3.5 h-3.5 text-stone-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <span>即時同步</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 橫幅區域 -->
+  <section class="max-w-4xl mx-auto px-4 pt-10 pb-6 text-center">
+    <span class="inline-block px-3 py-1 bg-amber-100/70 text-amber-900 text-xs font-semibold rounded-full mb-3 tracking-widest">
+      每週新鮮手作烘焙
+    </span>
+    <h2 class="text-2xl sm:text-4xl font-bold text-stone-900 tracking-wider mb-3">現貨與預購豆單</h2>
+    <p class="text-stone-500 text-xs sm:text-sm max-w-lg mx-auto leading-relaxed">
+      試算表庫存即時連動。點擊品項右下角的「選購」即可登記，烘焙完成後將依序出貨通知。
+    </p>
+  </section>
+
+  <!-- 主內容豆單目錄 -->
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex-1 w-full">
+    <!-- 載入中狀態 -->
+    <div id="loading" class="text-center py-24 text-stone-400">
+      <div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-stone-300 border-t-amber-800 mb-3"></div>
+      <p class="text-sm">正在從試算表同步最新上架豆單...</p>
+    </div>
+
+    <!-- 豆單網格 (清爽卡片排版) -->
+    <div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 hidden">
+      <!-- 卡片內容將由 JavaScript 動態生成 -->
+    </div>
+
+    <!-- 空狀態 -->
+    <div id="empty-state" class="text-center py-20 text-stone-400 hidden">
+      <div class="text-4xl mb-3">🫘</div>
+      <p class="text-sm">目前試算表中沒有勾選上架的豆子，請稍後再試。</p>
+    </div>
+  </main>
+
+  <!-- 快速下單彈窗 Modal -->
+  <div id="order-modal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 sm:p-7 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+      <button onclick="closeModal()" class="absolute top-4 right-4 text-stone-400 hover:text-stone-700 text-2xl leading-none">&times;</button>
+      
+      <div class="mb-4 pb-3 border-b border-stone-100">
+        <span id="modal-tag" class="text-[11px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 font-medium inline-block mb-1.5"></span>
+        <h3 id="modal-title" class="text-xl font-bold text-stone-900 font-serif"></h3>
+        <p id="modal-flavor" class="text-xs text-stone-500 mt-1 leading-relaxed"></p>
+      </div>
+
+      <form id="order-form" onsubmit="submitOrder(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-stone-700 mb-1">訂購人姓名 <span class="text-red-500">*</span></label>
+          <input type="text" id="cust-name" required placeholder="請填寫姓名" class="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-700/50">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-stone-700 mb-1">聯絡電話 / 分機 <span class="text-red-500">*</span></label>
+          <input type="tel" id="cust-phone" required placeholder="手機號碼或分機" class="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-700/50">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-stone-700 mb-1">規格</label>
+            <select id="spec-select" onchange="updatePriceDisplay()" class="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-700/50 bg-white">
+              <option value="half">半磅 (227g)</option>
+              <option value="one">一磅 (454g)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-stone-700 mb-1">烘焙度</label>
+            <select id="roast-select" class="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-700/50 bg-white">
+              <option value="淺焙">淺焙</option>
+              <option value="中焙">中焙</option>
+              <option value="深焙">深焙</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-stone-700 mb-1">數量</label>
+            <input type="number" id="qty-input" value="1" min="1" max="10" onchange="updatePriceDisplay()" class="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-700/50">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-stone-700 mb-1">取件方式</label>
+            <select id="delivery-select" class="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-700/50 bg-white">
+              <option value="自取">自取</option>
+              <option value="超商取貨">超商取貨 (+60運費)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-stone-700 mb-1">備註 (超商門市代碼 / 面交地點)</label>
+          <input type="text" id="cust-note" placeholder="例如：7-11 陽豐門市 / 243720" class="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-700/50">
+        </div>
+
+        <div class="pt-3 border-t border-stone-100 flex items-center justify-between">
+          <div>
+            <span class="text-xs text-stone-400 block">應付總額</span>
+            <span id="total-price" class="text-xl text-amber-900 font-bold font-mono">NT$ 0</span>
+          </div>
+          <button type="submit" id="submit-btn" class="bg-stone-900 text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-stone-800 transition active:scale-95 shadow-sm">
+            確認預購
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <footer class="bg-white border-t border-stone-200 py-6 text-center text-xs text-stone-400 mt-12">
+    © 老邱自家烘焙 | 雲端試算表自動化串接
+  </footer>
+
+  <script>
+    // ==========================================
+    // ⚙️ 設定區：請將此網址替換為你的 GAS /exec 網址
+    // ==========================================
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxaOj9Et5IVD-70sj-ARLzUzgqRPh-3dpUAlHrBUJb-x-T8ceL_dCAcdSvTYEEzmEYf/exec"; 
+
+    let currentProducts = [];
+    let selectedProduct = null;
+
+    // 抓取豆單（加上時間戳記與 no-store，避開快取）
+    async function loadProducts() {
+      const loader = document.getElementById("loading");
+      const grid = document.getElementById("product-grid");
+      const empty = document.getElementById("empty-state");
+      const icon = document.getElementById("refresh-icon");
+
+      loader.classList.remove("hidden");
+      grid.classList.add("hidden");
+      empty.classList.add("hidden");
+      icon.classList.add("animate-spin");
+
+      try {
+        const response = await fetch(`${SCRIPT_URL}?_t=${Date.now()}`, {
+          method: "GET",
+          cache: "no-store"
+        });
+        const data = await response.json();
+        currentProducts = data;
+
+        loader.classList.add("hidden");
+        icon.classList.remove("animate-spin");
+
+        if (!data || data.length === 0) {
+          empty.classList.remove("hidden");
+          return;
+        }
+
+        renderGrid(data);
+        grid.classList.remove("hidden");f
+      } catch (err) {
+        loader.innerHTML = `<p class="text-sm text-red-500 font-mono">讀取失敗：${err.message}<br>請確認 Apps Script 部署權限是否設為「所有人」。</p>`;
+        icon.classList.remove("animate-spin");
+      }
+    }
+
+    // 渲染商品卡片 (簡潔卡片)
+    function renderGrid(items) {
+      const grid = document.getElementById("product-grid");
+      grid.innerHTML = items.map((p, idx) => `
+        <div class="bg-white rounded-xl border border-stone-200/80 p-5 shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-md transition flex flex-col justify-between group">
+          <div>
+            <div class="flex items-center gap-1.5 mb-2.5">
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200/60">${p.process || '水洗'}</span>
+              <span class="text-[11px] px-2 py-0.5 rounded bg-stone-100 text-stone-600">${p.origin || '產區未填'}</span>
+              ${p.variety ? `<span class="text-[11px] px-2 py-0.5 rounded bg-stone-50 text-stone-400">${p.variety}</span>` : ''}
+            </div>
+            <h3 class="font-bold text-lg text-stone-900 mb-2 leading-snug group-hover:text-amber-900 transition">${p.name}</h3>
+            <p class="text-xs text-stone-500 mb-4 line-clamp-3 leading-relaxed">${p.flavor || '經典花果香甜，風味純淨平衡。'}</p>
+          </div>
+          <div class="pt-3 border-t border-stone-100 flex items-end justify-between">
+            <div>
+              <div class="text-xs text-stone-400">半磅 / 一磅</div>
+              <div class="text-base font-bold font-mono text-stone-900">
+                NT$ ${p.priceHalf} <span class="text-xs font-normal text-stone-400">/ ${p.pricePound ? 'NT$ ' + p.pricePound : '-'}</span>
+              </div>
+            </div>
+            <button onclick="openOrderModal(${idx})" class="px-4 py-2 rounded-lg bg-stone-900 hover:bg-stone-800 text-white text-xs font-medium transition active:scale-95 shadow-sm">
+              選購
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // 打開訂購彈窗
+    function openOrderModal(idx) {
+      selectedProduct = currentProducts[idx];
+      document.getElementById("modal-tag").textContent = `${selectedProduct.origin} · ${selectedProduct.process}`;
+      document.getElementById("modal-title").textContent = selectedProduct.name;
+      document.getElementById("modal-flavor").textContent = selectedProduct.flavor || '暫無風味細節';
+      updatePriceDisplay();
+      document.getElementById("order-modal").classList.remove("hidden");
+    }
+
+    function closeModal() {
+      document.getElementById("order-modal").classList.add("hidden");
+    }
+
+    // 計算價格
+    function updatePriceDisplay() {
+      if (!selectedProduct) return;
+      const spec = document.getElementById("spec-select").value;
+      const qty = parseInt(document.getElementById("qty-input").value) || 1;
+      const unitPrice = spec === 'half' ? selectedProduct.priceHalf : selectedProduct.pricePound;
+      const total = unitPrice * qty;
+      document.getElementById("total-price").textContent = `NT$ ${total.toLocaleString()}`;
+      return total;
+    }
+
+    // 提交訂單
+    async function submitOrder(e) {
+      e.preventDefault();
+      const btn = document.getElementById("submit-btn");
+      btn.disabled = true;
+      btn.textContent = "送出中...";
+
+      const total = updatePriceDisplay();
+      const payload = {
+        item: selectedProduct.name,
+        name: document.getElementById("cust-name").value.trim(),
+        phone: document.getElementById("cust-phone").value.trim(),
+        spec: document.getElementById("spec-select").value === 'half' ? '半磅' : '一磅',
+        roast: document.getElementById("roast-select").value,
+        qty: document.getElementById("qty-input").value,
+        delivery: document.getElementById("delivery-select").value,
+        totalPrice: total,
+        note: document.getElementById("cust-note").value.trim()
+      };
+
+      try {
+        await fetch(SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors", // Apps Script 跨網域標準寫法
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        alert(`🎉 預購成功！\n品項：${payload.item} (${payload.spec})\n已即時登記至試算表。`);
+        closeModal();
+        document.getElementById("order-form").reset();
+      } catch (err) {
+        alert("送出失敗，請檢查網路連線或直接聯繫老邱！");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "確認預購";
+      }
+    }
+
+    // 頁面載入時執行
+    window.onload = loadProducts;
+  </script>
+</body>
 </html>
