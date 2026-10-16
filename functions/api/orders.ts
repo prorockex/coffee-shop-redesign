@@ -21,6 +21,11 @@ const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets'
 const MAX_BODY = 16_000
 const SHIPPING_FEE = 60
 
+export async function bridgeProductId(productId: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(productId)))
+  return `p-${Array.from(digest.slice(0, 8), (byte) => byte.toString(16).padStart(2, '0')).join('')}`
+}
+
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } })
 }
@@ -125,7 +130,7 @@ export async function onRequestPost({ request, env }: PagesContext): Promise<Res
       if (!product || product.inventoryStatus !== 'listed') return json({ error: '你選擇的商品已售完，請重新確認選購清單。' }, 409)
       const unitPrice = priceFor(product, line.size)
       subtotal += unitPrice * line.quantity
-      itemDetails.push({ productId: product.id, name: product.name, size: line.size, quantity: line.quantity, unitPrice })
+      itemDetails.push({ productId: await bridgeProductId(product.id), name: product.name, size: line.size, quantity: line.quantity, unitPrice })
     }
     const shipping = order.deliveryMethod === 'convenience_store' ? SHIPPING_FEE : 0
     const orderId = `QC-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`

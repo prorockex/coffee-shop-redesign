@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { onRequestPost, type Env } from './orders'
+import { bridgeProductId, onRequestPost, type Env } from './orders'
 
 let privateKeyPem = ''
 beforeAll(async () => {
@@ -142,7 +142,7 @@ describe('public order endpoint', () => {
     expect(body.orderId).toBe(result.orderId)
     expect(body.customerName).toBe(validOrder.customerName)
     expect(body.note).toBe(validOrder.note)
-    expect(body.items).toEqual([{ productId: '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', name: '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', size: 'half', quantity: 2, unitPrice: 350 }])
+    expect(body.items).toEqual([{ productId: await bridgeProductId('衣索比亞 古吉 烏拉嘎 提波波卡處理廠'), name: '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', size: 'half', quantity: 2, unitPrice: 350 }])
     expect(body.total).toBe(760)
     expect(JSON.stringify(result)).not.toContain(validOrder.phone)
   })
