@@ -32,7 +32,7 @@ const validOrder = {
   deliveryMethod: 'convenience_store',
   storeInfo: '7-ELEVEN 測試門市 123456',
   note: '請先電話聯絡',
-  items: [{ productId: 'ethiopia-guji-uraga-tipoboka', size: 'half', quantity: 2 }],
+  items: [{ productId: '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', size: 'half', quantity: 2 }],
   privacyConsent: true,
   turnstileToken: 'valid-challenge',
   website: '',
@@ -71,7 +71,7 @@ describe('public order endpoint', () => {
     const fakeFetch = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, hostname: 'coffee-shop-redesign.pages.dev', action: 'order' }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'access' }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ values: [['p024']] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ values: [['P024', '衣索比亞 歐若米雅 吉瑪莉姆', '衣索比亞', '', '水洗', '白花', 350, 690, true], ['P022', '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', '衣索比亞', '', '水洗', '白花', 350, 690, false]] }), { status: 200 }))
     vi.stubGlobal('fetch', fakeFetch)
     const response = await onRequestPost({
       request: new Request('https://coffee-shop-redesign.pages.dev/api/orders', {
@@ -88,7 +88,7 @@ describe('public order endpoint', () => {
     const fakeFetch = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, hostname: 'coffee-shop-redesign.pages.dev', action: 'order' }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'access' }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ values: [['p022']] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ values: [['P022', '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', '衣索比亞', '', '水洗', '白花', 350, 690, true]] }), { status: 200 }))
       .mockImplementationOnce(async (_url, options) => {
         orderId = (JSON.parse(String((options as RequestInit).body)) as { orderId: string }).orderId
         return new Response(null, { status: 302, headers: { location: 'https://script.googleusercontent.com/macros/echo?result=test' } })
@@ -117,7 +117,7 @@ describe('public order endpoint', () => {
     const fakeFetch = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, hostname: 'coffee-shop-redesign.pages.dev', action: 'order' }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'access' }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ values: [['p022']] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ values: [['P022', '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', '衣索比亞', '', '水洗', '白花', 350, 690, true]] }), { status: 200 }))
       .mockImplementationOnce(async (_url, options) => {
         const requestBody = JSON.parse(String((options as RequestInit).body)) as { orderId: string }
         return new Response(JSON.stringify({ status: 'success', orderId: requestBody.orderId, notification: 'sent' }), { status: 200 })
@@ -142,7 +142,7 @@ describe('public order endpoint', () => {
     expect(body.orderId).toBe(result.orderId)
     expect(body.customerName).toBe(validOrder.customerName)
     expect(body.note).toBe(validOrder.note)
-    expect(body.items).toEqual([{ productId: 'ethiopia-guji-uraga-tipoboka', name: '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', size: 'half', quantity: 2, unitPrice: 350 }])
+    expect(body.items).toEqual([{ productId: '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', name: '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', size: 'half', quantity: 2, unitPrice: 350 }])
     expect(body.total).toBe(760)
     expect(JSON.stringify(result)).not.toContain(validOrder.phone)
   })

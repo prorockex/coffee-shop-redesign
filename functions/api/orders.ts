@@ -1,4 +1,5 @@
-import { isProductAvailable, products, priceFor, type BagSize, type CartLine } from '../../src/catalog'
+import { priceFor, type BagSize, type CartLine } from '../../src/catalog'
+import { productsFromSheetRows, SHEET_RANGE_COLUMNS } from '../../src/sheet-products'
 
 export interface Env {
   GOOGLE_SERVICE_ACCOUNT_EMAIL?: string
@@ -111,17 +112,17 @@ export async function onRequestPost({ request, env }: PagesContext): Promise<Res
     if (!turnstileResponse.ok || !turnstile.success || turnstile.hostname !== new URL(env.STOREFRONT_ORIGIN).hostname || turnstile.action !== 'order') return json({ error: '驗證逾時，請重新完成驗證後送出。' }, 403)
     const token = await accessToken(email, privateKey, request.signal)
     const tab = (env.STOCK_SHEET_TAB?.trim() || 'Products').replace(/'/g, "''")
-    const range = encodeURIComponent(`'${tab}'!A2:A1000`)
-    const stockUrl = `${SHEETS_API}/${encodeURIComponent(stockSheetId)}/values/${range}?majorDimension=ROWS`
+    const range = encodeURIComponent(`'${tab}'!${SHEET_RANGE_COLUMNS}`)
+    const stockUrl = `${SHEETS_API}/${encodeURIComponent(stockSheetId)}/values/${range}?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE`
     const stockResponse = await fetch(stockUrl, { headers: { authorization: `Bearer ${token}` }, signal: request.signal })
     if (!stockResponse.ok) throw new Error('Inventory read failed')
     const sheet = await stockResponse.json() as { values?: unknown }
-    const uniqueCodes = [...new Set(Array.isArray(sheet.values) ? sheet.values.flatMap((row) => Array.isArray(row) && (typeof row[0] === 'string' || typeof row[0] === 'number') && String(row[0]).trim() ? [String(row[0]).trim()] : []) : [])]
+    const listedProducts = productsFromSheetRows(sheet.values)
     let subtotal = 0
     const itemDetails: Array<{ productId: string; name: string; size: BagSize; quantity: number; unitPrice: number }> = []
     for (const line of order.items) {
-      const product = products.find((item) => item.id === line.productId)
-      if (!product || !isProductAvailable(product, uniqueCodes) || product.inventoryStatus !== 'listed') return json({ error: '你選擇的商品已售完，請重新確認選購清單。' }, 409)
+      const product = listedProducts.find((item) => item.id === line.productId)
+      if (!product || product.inventoryStatus !== 'listed') return json({ error: '你選擇的商品已售完，請重新確認選購清單。' }, 409)
       const unitPrice = priceFor(product, line.size)
       subtotal += unitPrice * line.quantity
       itemDetails.push({ productId: product.id, name: product.name, size: line.size, quantity: line.quantity, unitPrice })

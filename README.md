@@ -48,3 +48,8 @@ Availability is determined by the `Products` sheet's column I (上架 checkbox):
 ## Typography and artwork
 
 The hero uses an original generated paper-sculpture coffee illustration at `public/hero-paper-sculpture.png`; its exact generation prompt is embedded in the PNG metadata. The interface uses the system sans-serif stack and requires no remote fonts.
+
+
+## Listing rule (2026-10-16)
+
+The storefront list comes only from the `Products` sheet: every row whose column I (`上架` checkbox) is TRUE is shown, using B 名稱, C 產區, D 豆種, E 處理法, F 風味描述, G 半磅價格, H 一磅價格 from that row. Column A (ID) is not used. A new bean = new sheet row + tick, no code change. Missing fields are filled from the static catalog in `src/catalog.ts` by normalized name when possible; rows without a name or prices are skipped. `/api/stock` returns `{ products, checkedAt }`; `/api/orders` re-reads the sheet and prices items from it. If the feed fails before any success the page shows an error state (no static fallback, to avoid selling unlisted beans); after a success it keeps the last list.

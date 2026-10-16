@@ -62,3 +62,8 @@ Customers browse products, select quantities, provide order details, and submit 
 4. Make order status visible and manageable to the owner.
 5. Never imply payment, inventory, or order persistence is live until it has been verified.
 6. Keep the private source repository private; the rendered storefront may be public only after the owner confirms the launch-ready catalogue and order destination.
+
+
+## Listing rule (2026-10-16)
+
+The storefront list comes only from the `Products` sheet: every row whose column I (`上架` checkbox) is TRUE is shown, using B 名稱, C 產區, D 豆種, E 處理法, F 風味描述, G 半磅價格, H 一磅價格 from that row. Column A (ID) is not used. A new bean = new sheet row + tick, no code change. Missing fields are filled from the static catalog in `src/catalog.ts` by normalized name when possible; rows without a name or prices are skipped. `/api/stock` returns `{ products, checkedAt }`; `/api/orders` re-reads the sheet and prices items from it. If the feed fails before any success the page shows an error state (no static fallback, to avoid selling unlisted beans); after a success it keeps the last list.

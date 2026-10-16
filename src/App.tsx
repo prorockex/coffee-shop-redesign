@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { canAddMore, filterProducts, getAvailableProducts, getCartTotal, isProductAvailable, products, stockSnapshotCodes, priceFor, type BagSize, type CartLine, type Product } from './catalog'
+import { canAddMore, filterProducts, getCartTotal, priceFor, type BagSize, type CartLine, type Product } from './catalog'
 import { parseStockFeed, stockSyncLabel, type StockSyncState } from './stock-feed'
 import { submitOrder, type OrderReceipt } from './order-client'
 import { OrderCaptcha } from './OrderCaptcha'
@@ -8,9 +8,9 @@ import './App.css'
 const priceText = (amount: number) => `$${amount.toLocaleString('zh-TW')}`
 const bagLabel = (size: BagSize) => size === 'half' ? '半磅' : '一磅'
 
-function useStockFeed(onStockCodes?: (codes: readonly string[]) => void) {
-  const [stockCodes, setStockCodes] = useState<readonly string[]>(stockSnapshotCodes)
-  const [syncState, setSyncState] = useState<StockSyncState>('snapshot')
+function useStockFeed(onProducts?: (items: readonly Product[]) => void) {
+  const [liveProducts, setLiveProducts] = useState<Product[]>([])
+  const [syncState, setSyncState] = useState<StockSyncState>('loading')
   const [checkedAt, setCheckedAt] = useState<string | null>(null)
 
   useEffect(() => {
@@ -25,12 +25,12 @@ function useStockFeed(onStockCodes?: (codes: readonly string[]) => void) {
         if (!response.ok) throw new Error('Stock feed unavailable')
         const feed = parseStockFeed(await response.json())
         if (!mounted) return
-        setStockCodes(feed.stockCodes)
+        setLiveProducts(feed.products)
         setCheckedAt(feed.checkedAt)
         setSyncState('live')
-        onStockCodes?.(feed.stockCodes)
+        onProducts?.(feed.products)
       } catch {
-        if (mounted) setSyncState((current) => current === 'live' ? 'stale' : current)
+        if (mounted) setSyncState((current) => current === 'live' || current === 'stale' ? 'stale' : 'error')
       } finally {
         inFlight = false
       }
@@ -42,9 +42,9 @@ function useStockFeed(onStockCodes?: (codes: readonly string[]) => void) {
       mounted = false
       window.clearInterval(interval)
     }
-  }, [onStockCodes])
+  }, [onProducts])
 
-  return { stockCodes, syncState, checkedAt }
+  return { liveProducts, syncState, checkedAt }
 }
 
 function ShopHeader({ cartCount, onCart, cartOpen = false }: { cartCount: number; onCart?: () => void; cartOpen?: boolean }) {
@@ -96,21 +96,17 @@ function Storefront() {
   const [receipt, setReceipt] = useState<OrderReceipt | null>(null)
   const [website, setWebsite] = useState('')
   const [shippingContact, setShippingContact] = useState('')
-  const handleStockUpdate = useCallback((codes: readonly string[]) => {
+  const handleStockUpdate = useCallback((items: readonly Product[]) => {
     setCart((current) => {
-      const next = current.filter((line) => {
-        const product = products.find((item) => item.id === line.productId)
-        return Boolean(product && isProductAvailable(product, codes))
-      })
+      const next = current.filter((line) => items.some((item) => item.id === line.productId))
       return next.length === current.length ? current : next
     })
   }, [])
-  const { stockCodes: activeStockCodes, syncState, checkedAt } = useStockFeed(handleStockUpdate)
+  const { liveProducts: availableProducts, syncState, checkedAt } = useStockFeed(handleStockUpdate)
 
-  const availableProducts = useMemo(() => getAvailableProducts(products, activeStockCodes), [activeStockCodes])
   const filtered = useMemo(() => filterProducts(availableProducts, query).filter((product) => processFilter === '全部' || product.process.includes(processFilter)), [availableProducts, query, processFilter])
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0)
-  const total = getCartTotal(cart)
+  const total = getCartTotal(cart, availableProducts)
   const syncTime = checkedAt ? new Date(checkedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : ''
   const stockSyncText = `${stockSyncLabel(syncState)}${syncTime ? ` 最近檢查 ${syncTime}。` : ''} 下單後由店主與你確認交付方式。`
   const shipping = deliveryMethod === 'convenience_store' ? 60 : 0
@@ -121,8 +117,8 @@ function Storefront() {
     setReceipt(null)
     setShippingContact('')
     const size = sizes[product.id] ?? 'half'
-    if (!canAddMore(cart, product, size, 1, activeStockCodes)) {
-      setNotice('這款目前沒有現貨編號，不開放加入選豆單。')
+    if (!canAddMore(cart, product, size, 1)) {
+      setNotice('這款目前暫不開放加入選豆單。')
       return
     }
     setCart((current) => {
@@ -211,7 +207,7 @@ function Storefront() {
             <div>
               <h2 id="catalog-title">本期豆單</h2>
               <p className="small-overline">COFFEE INDEX · 老邱自家烘焙</p>
-              <p className="catalog-intro">只列出第一欄有編號的現貨品項；風味與價格依商品表整理。</p>
+              <p className="catalog-intro">只列出商品表中勾選「上架」的品項；風味與價格依商品表整理。</p>
             </div>
             <p className="result-count" aria-live="polite">找到 <strong>{filtered.length}</strong> 款</p>
           </div>
@@ -280,7 +276,7 @@ function Storefront() {
           <>
             <ul className="cart-lines">
               {cart.map((line) => {
-                const product = products.find((item) => item.id === line.productId)
+                const product = availableProducts.find((item) => item.id === line.productId)
                 if (!product) return null
                 return <li key={`${line.productId}-${line.size}`} className="cart-line">
                   <div><h3>{product.name}</h3><p>{bagLabel(line.size)}・{priceText(priceFor(product, line.size))}／袋</p></div>

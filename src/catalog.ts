@@ -45,27 +45,7 @@ export const products: Product[] = [
   { id: 'ethiopia-bastet-geisha-2026', name: '衣索比亞 2026 芭絲特 藝伎 紅圈計畫', origin: '衣索比亞', process: '水洗', flavor: '葡萄、柑橘、檸檬、甜柚、牡丹花', priceHalf: 350, priceOne: 690, inventoryStatus: 'listed' },
 ]
 
-// Snapshot of Google Sheets `Products`: a row is listed only when column I (上架 checkbox) is TRUE; column A is the product ID.
-// Blank IDs are intentionally absent here, so those products stay off the storefront.
-export const stockCodesByProductId: Readonly<Partial<Record<string, string>>> = Object.freeze({
-  'ethiopia-guji-uraga-tipoboka': 'p022',
-  'kenya-riyeri-queen-blackberry': 'p023',
-  'ethiopia-oromia-jimalim': 'p024',
-  'colombia-narino-floral-geisha': 'p025',
-  'ethiopia-bench-maji-sparrow-geisha': 'p026',
-  'ethiopia-bastet-geisha-2026': 'p027',
-})
-
-export const stockSnapshotCodes: readonly string[] = Object.freeze(Object.values(stockCodesByProductId).filter((code): code is string => Boolean(code?.trim())))
-
-export function isProductAvailable(product: Product, activeStockCodes: readonly string[] = stockSnapshotCodes): boolean {
-  const stockCode = stockCodesByProductId[product.id]?.trim()
-  return Boolean(stockCode && activeStockCodes.some((code) => code.trim() === stockCode))
-}
-
-export function getAvailableProducts(items: Product[] = products, activeStockCodes: readonly string[] = stockSnapshotCodes): Product[] {
-  return items.filter((product) => isProductAvailable(product, activeStockCodes))
-}
+// Static catalog: used only to fill missing fields of sheet rows by name. Listing comes from the Products sheet column I.
 
 export function filterProducts(items: Product[], query: string): Product[] {
   const needle = query.trim().toLocaleLowerCase('zh-TW')
@@ -90,6 +70,6 @@ export function getCartTotal(lines: CartLine[], items: Product[] = products): nu
   }, 0)
 }
 
-export function canAddMore(_lines: CartLine[], product: Product, _size: BagSize, _quantity = 1, activeStockCodes: readonly string[] = stockSnapshotCodes): boolean {
-  return isProductAvailable(product, activeStockCodes) && product.inventoryStatus !== 'review'
+export function canAddMore(_lines: CartLine[], product: Product, _size: BagSize, _quantity = 1): boolean {
+  return product.inventoryStatus !== 'review'
 }

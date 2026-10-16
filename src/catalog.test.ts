@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterProducts, getCartTotal, products, canAddMore, getAvailableProducts, type CartLine } from './catalog'
+import { filterProducts, getCartTotal, products, canAddMore, type CartLine } from './catalog'
 
 const limitedId = 'colombia-huila-rainforest'
 
@@ -36,30 +36,4 @@ describe('catalog data and order calculations', () => {
     expect(canAddMore([], item!, 'one', 1)).toBe(false)
   })
 
-  it('shows only products whose Google Sheet ID cell is non-empty', () => {
-    expect(getAvailableProducts().map((product) => product.id)).toEqual([
-      'ethiopia-guji-uraga-tipoboka',
-      'kenya-riyeri-queen-blackberry',
-      'ethiopia-oromia-jimalim',
-      'colombia-narino-floral-geisha',
-      'ethiopia-bench-maji-sparrow-geisha',
-      'ethiopia-bastet-geisha-2026',
-    ])
-    expect(getAvailableProducts()).toHaveLength(6)
-  })
-
-  it('does not allow sold-out products to be added to the cart', () => {
-    const soldOut = products.find((product) => product.id === 'ethiopia-angel-geisha')!
-    const stocked = products.find((product) => product.id === 'ethiopia-guji-uraga-tipoboka')!
-    expect(canAddMore([], soldOut, 'half')).toBe(false)
-    expect(canAddMore([], stocked, 'half')).toBe(true)
-  })
-
-  it('replaces the snapshot with the latest server-provided stock IDs', () => {
-    expect(getAvailableProducts(products, ['p022']).map((product) => product.id)).toEqual([
-      'ethiopia-guji-uraga-tipoboka',
-    ])
-    const removedFromSheet = products.find((product) => product.id === 'kenya-riyeri-queen-blackberry')!
-    expect(canAddMore([], removedFromSheet, 'half', 1, ['p022'])).toBe(false)
-  })
 })

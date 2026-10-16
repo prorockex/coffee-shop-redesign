@@ -1,3 +1,6 @@
+import { productsFromSheetRows, SHEET_RANGE_COLUMNS } from '../../src/sheet-products'
+export { isListed } from '../../src/sheet-products'
+
 export interface Env {
   GOOGLE_SERVICE_ACCOUNT_EMAIL?: string
   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?: string
@@ -20,14 +23,6 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly'
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets'
 const CACHE_CONTROL = 'public, max-age=0, s-maxage=30'
-
-// Column I (index 8) is the 上架 checkbox; only checked rows are listed.
-const LISTED_COLUMN_INDEX = 8
-
-export function isListed(value: unknown): boolean {
-  if (value === true) return true
-  return typeof value === 'string' && value.trim().toUpperCase() === 'TRUE'
-}
 
 function getWorkerCache(): WorkerCache | undefined {
   return (globalThis as unknown as { caches?: { default?: WorkerCache } }).caches?.default
@@ -131,7 +126,7 @@ export async function onRequestGet({ request, env, waitUntil }: PagesContext): P
   try {
     const token = await getAccessToken(email, privateKey, request.signal)
     const escapedTab = sheetTab.replace(/'/g, "''")
-    const range = `'${escapedTab}'!A2:I1000`
+    const range = `'${escapedTab}'!${SHEET_RANGE_COLUMNS}`
     const url = new URL(`${SHEETS_API}/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(range)}`)
     url.searchParams.set('majorDimension', 'ROWS')
     url.searchParams.set('valueRenderOption', 'UNFORMATTED_VALUE')
@@ -143,16 +138,9 @@ export async function onRequestGet({ request, env, waitUntil }: PagesContext): P
 
     const sheetData = await response.json() as { values?: unknown }
     const values = Array.isArray(sheetData.values) ? sheetData.values : []
-    const stockCodes = [...new Set(values.flatMap((row) => {
-      if (!Array.isArray(row)) return []
-      if (!isListed(row[LISTED_COLUMN_INDEX])) return []
-      const value = row[0]
-      if (typeof value !== 'string' && typeof value !== 'number') return []
-      const code = String(value).trim()
-      return code ? [code] : []
-    }))]
+    const listedProducts = productsFromSheetRows(values)
 
-    const result = jsonResponse({ stockCodes, checkedAt: new Date().toISOString() }, 200, CACHE_CONTROL)
+    const result = jsonResponse({ products: listedProducts, checkedAt: new Date().toISOString() }, 200, CACHE_CONTROL)
     if (cache) {
       const write = cache.put(cacheKey, result.clone()).catch(() => undefined)
       if (waitUntil) waitUntil(write)
