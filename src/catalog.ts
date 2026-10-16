@@ -45,7 +45,7 @@ export const products: Product[] = [
   { id: 'ethiopia-bastet-geisha-2026', name: '衣索比亞 2026 芭絲特 藝伎 紅圈計畫', origin: '衣索比亞', process: '水洗', flavor: '葡萄、柑橘、檸檬、甜柚、牡丹花', priceHalf: 350, priceOne: 690, inventoryStatus: 'listed' },
 ]
 
-// Current snapshot of Google Sheets `Products!A:A`: a non-empty product ID means in stock.
+// Snapshot of Google Sheets `Products`: a row is listed only when column I (上架 checkbox) is TRUE; column A is the product ID.
 // Blank IDs are intentionally absent here, so those products stay off the storefront.
 export const stockCodesByProductId: Readonly<Partial<Record<string, string>>> = Object.freeze({
   'ethiopia-guji-uraga-tipoboka': 'p022',

@@ -21,6 +21,14 @@ const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly'
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets'
 const CACHE_CONTROL = 'public, max-age=0, s-maxage=30'
 
+// Column I (index 8) is the 上架 checkbox; only checked rows are listed.
+const LISTED_COLUMN_INDEX = 8
+
+export function isListed(value: unknown): boolean {
+  if (value === true) return true
+  return typeof value === 'string' && value.trim().toUpperCase() === 'TRUE'
+}
+
 function getWorkerCache(): WorkerCache | undefined {
   return (globalThis as unknown as { caches?: { default?: WorkerCache } }).caches?.default
 }
@@ -123,9 +131,10 @@ export async function onRequestGet({ request, env, waitUntil }: PagesContext): P
   try {
     const token = await getAccessToken(email, privateKey, request.signal)
     const escapedTab = sheetTab.replace(/'/g, "''")
-    const range = `'${escapedTab}'!A2:A1000`
+    const range = `'${escapedTab}'!A2:I1000`
     const url = new URL(`${SHEETS_API}/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(range)}`)
     url.searchParams.set('majorDimension', 'ROWS')
+    url.searchParams.set('valueRenderOption', 'UNFORMATTED_VALUE')
     const response = await fetch(url, {
       headers: { authorization: `Bearer ${token}` },
       signal: request.signal,
@@ -136,6 +145,7 @@ export async function onRequestGet({ request, env, waitUntil }: PagesContext): P
     const values = Array.isArray(sheetData.values) ? sheetData.values : []
     const stockCodes = [...new Set(values.flatMap((row) => {
       if (!Array.isArray(row)) return []
+      if (!isListed(row[LISTED_COLUMN_INDEX])) return []
       const value = row[0]
       if (typeof value !== 'string' && typeof value !== 'number') return []
       const code = String(value).trim()

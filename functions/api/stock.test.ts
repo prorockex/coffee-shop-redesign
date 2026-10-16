@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { onRequestGet, type Env } from './stock'
+import { isListed, onRequestGet, type Env } from './stock'
 
 const sheetId = 'test-sheet-id'
 let privateKeyPem = ''
@@ -31,7 +31,7 @@ describe('Cloudflare stock endpoint', () => {
   it('returns only non-empty product IDs from the private Products sheet', async () => {
     const fakeFetch = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'test-access-token' }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ values: [[''], ['p022'], [''], ['p023 '], ['p022']] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ values: [[''], ['p022', '', '', '', '', '', '', '', true], ['', '', '', '', '', '', '', '', true], ['p023 ', '', '', '', '', '', '', '', true], ['p022', '', '', '', '', '', '', '', true]] }), { status: 200 }))
     vi.stubGlobal('fetch', fakeFetch)
 
     const response = await onRequestGet({
@@ -60,7 +60,8 @@ describe('Cloudflare stock endpoint', () => {
     const signature = Uint8Array.from(decodeBase64Url(signatureSegment), (character) => character.charCodeAt(0))
     expect(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', verifyKey, signature, new TextEncoder().encode(`${headerSegment}.${payloadSegment}`))).toBe(true)
     const [sheetUrl, sheetOptions] = fakeFetch.mock.calls[1] as [string, RequestInit]
-    expect(decodeURIComponent(sheetUrl)).toContain("'Products'!A2:A1000")
+    expect(decodeURIComponent(sheetUrl)).toContain("'Products'!A2:I1000")
+    expect(new URL(sheetUrl).searchParams.get('valueRenderOption')).toBe('UNFORMATTED_VALUE')
     expect(new Headers(sheetOptions.headers).get('authorization')).toBe('Bearer test-access-token')
   })
 
@@ -110,7 +111,7 @@ describe('Cloudflare stock endpoint', () => {
     const cache = { match: vi.fn().mockResolvedValue(null), put: vi.fn().mockResolvedValue(undefined) }
     const fakeFetch = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'test-access-token' }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ values: [['p022']] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ values: [['p022', '', '', '', '', '', '', '', true]] }), { status: 200 }))
     const waitUntil = vi.fn()
     vi.stubGlobal('caches', { default: cache })
     vi.stubGlobal('fetch', fakeFetch)
@@ -122,5 +123,37 @@ describe('Cloudflare stock endpoint', () => {
     expect(waitUntil).toHaveBeenCalledOnce()
     const [cacheKey] = cache.match.mock.calls[0] as [Request]
     expect(cacheKey.url).toContain(sheetId)
+  })
+
+  it('lists only rows whose column I checkbox is TRUE', async () => {
+    const fakeFetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'test-access-token' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ values: [
+        ['p001', '', '', '', '', '', '', '', true],
+        ['p002', '', '', '', '', '', '', '', false],
+        ['p003', 'blank I'],
+        ['p004', '', '', '', '', '', '', '', ''],
+        ['p005', '', '', '', '', '', '', '', 'TRUE'],
+        ['p006', '', '', '', '', '', '', '', 'true'],
+        ['p007', '', '', '', '', '', '', '', 'FALSE'],
+      ] }), { status: 200 }))
+    vi.stubGlobal('fetch', fakeFetch)
+
+    const response = await onRequestGet({ request: new Request('https://shop.example/api/stock'), env: env() })
+    const result = await response.json() as { stockCodes: string[] }
+    expect(result.stockCodes).toEqual(['p001', 'p005', 'p006'])
+  })
+})
+
+describe('isListed', () => {
+  it('accepts boolean true and case-insensitive string TRUE only', () => {
+    expect(isListed(true)).toBe(true)
+    expect(isListed('TRUE')).toBe(true)
+    expect(isListed(' true ')).toBe(true)
+    expect(isListed(false)).toBe(false)
+    expect(isListed('FALSE')).toBe(false)
+    expect(isListed('')).toBe(false)
+    expect(isListed(undefined)).toBe(false)
+    expect(isListed(1)).toBe(false)
   })
 })
