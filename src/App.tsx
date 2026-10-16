@@ -1,18 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { canAddMore, filterProducts, getAvailableProducts, getCartTotal, isProductAvailable, products, stockSnapshotCodes, priceFor, type BagSize, type CartLine, type Product } from './catalog'
 import { parseStockFeed, stockSyncLabel, type StockSyncState } from './stock-feed'
+import { submitOrder, type OrderReceipt } from './order-client'
+import { OrderCaptcha } from './OrderCaptcha'
 import './App.css'
 
-type Status = 'new' | 'working' | 'done'
-type PreviewOrder = { id: string; guest: string; time: string; status: Status; lines: CartLine[] }
-
-const demoOrders: PreviewOrder[] = [
-  { id: 'DEMO-028', guest: '示意顧客 A', time: '示意日期・09:40', status: 'new', lines: [{ productId: 'kenya-ab-top-honey-riruni', size: 'half', quantity: 1 }] },
-  { id: 'DEMO-027', guest: '示意顧客 B', time: '示意日期・昨天', status: 'working', lines: [{ productId: 'ethiopia-angel-geisha', size: 'one', quantity: 1 }, { productId: 'kenya-aa-faq', size: 'half', quantity: 1 }] },
-  { id: 'DEMO-026', guest: '示意顧客 C', time: '示意日期・前天', status: 'done', lines: [{ productId: 'colombia-narino-floral-geisha', size: 'half', quantity: 1 }] },
-]
-
-const statusLabels: Record<Status, string> = { new: '待處理', working: '處理中', done: '已完成' }
 const priceText = (amount: number) => `$${amount.toLocaleString('zh-TW')}`
 const bagLabel = (size: BagSize) => size === 'half' ? '半磅' : '一磅'
 
@@ -55,7 +47,7 @@ function useStockFeed(onStockCodes?: (codes: readonly string[]) => void) {
   return { stockCodes, syncState, checkedAt }
 }
 
-function ShopHeader({ cartCount, onCart, cartOpen = false, isAdmin = false }: { cartCount: number; onCart?: () => void; cartOpen?: boolean; isAdmin?: boolean }) {
+function ShopHeader({ cartCount, onCart, cartOpen = false }: { cartCount: number; onCart?: () => void; cartOpen?: boolean }) {
   return (
     <header className="masthead">
       <a className="brand" href="/" aria-label="老邱自家烘焙首頁">
@@ -63,10 +55,9 @@ function ShopHeader({ cartCount, onCart, cartOpen = false, isAdmin = false }: { 
         <span className="brand-name"><strong>老邱自家烘焙</strong></span>
       </a>
       <nav className="main-nav" aria-label="主要導覽">
-        <a href={isAdmin ? '/' : '#catalog'}>{isAdmin ? '回到豆單' : '選豆'}</a>
-        {!isAdmin && <a href="/admin">訂單管理預覽</a>}
+        <a href="#catalog">選豆</a>
       </nav>
-      {!isAdmin && onCart && (
+      {onCart && (
         <button className="cart-trigger" type="button" onClick={onCart} aria-controls="cart-panel" aria-expanded={cartOpen}>
           <Icon name="bag" /><span>選豆單</span><span className="cart-count" aria-label={`${cartCount} 件`}>{cartCount}</span>
         </button>
@@ -92,6 +83,19 @@ function Storefront() {
   const [cart, setCart] = useState<CartLine[]>([])
   const [cartOpen, setCartOpen] = useState(false)
   const [notice, setNotice] = useState('')
+  const [customerName, setCustomerName] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'convenience_store'>('pickup')
+  const [storeInfo, setStoreInfo] = useState('')
+  const [orderNote, setOrderNote] = useState('')
+  const [privacyConsent, setPrivacyConsent] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState('')
+  const [captchaResetKey, setCaptchaResetKey] = useState(0)
+  const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [receipt, setReceipt] = useState<OrderReceipt | null>(null)
+  const [website, setWebsite] = useState('')
+  const [shippingContact, setShippingContact] = useState('')
   const handleStockUpdate = useCallback((codes: readonly string[]) => {
     setCart((current) => {
       const next = current.filter((line) => {
@@ -108,9 +112,14 @@ function Storefront() {
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0)
   const total = getCartTotal(cart)
   const syncTime = checkedAt ? new Date(checkedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : ''
-  const stockSyncText = `${stockSyncLabel(syncState)}${syncTime ? ` 最近檢查 ${syncTime}。` : ''} 本預覽不接受真實訂單。`
+  const stockSyncText = `${stockSyncLabel(syncState)}${syncTime ? ` 最近檢查 ${syncTime}。` : ''} 下單後由店主與你確認交付方式。`
+  const shipping = deliveryMethod === 'convenience_store' ? 60 : 0
+  const grandTotal = total + shipping
+  const handleTurnstileToken = useCallback((token: string) => setTurnstileToken(token), [])
 
   function addProduct(product: Product) {
+    setReceipt(null)
+    setShippingContact('')
     const size = sizes[product.id] ?? 'half'
     if (!canAddMore(cart, product, size, 1, activeStockCodes)) {
       setNotice('這款目前沒有現貨編號，不開放加入選豆單。')
@@ -122,7 +131,7 @@ function Storefront() {
       return [...current, { productId: product.id, size, quantity: 1 }]
     })
     setNotice(`已將「${product.name}」加入選豆單。`)
-    setCartOpen(true)
+    setCartOpen(false)
   }
 
   function changeQuantity(line: CartLine, delta: number) {
@@ -131,6 +140,50 @@ function Storefront() {
       const quantity = item.quantity + delta
       return quantity > 0 ? [{ ...item, quantity }] : []
     }))
+  }
+
+  async function handleSubmitOrder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!privacyConsent) {
+      setFormError('請先勾選個資使用說明。')
+      return
+    }
+    if (!turnstileToken) {
+      setFormError('請先完成防自動送單驗證。')
+      return
+    }
+    setSubmitting(true)
+    setFormError('')
+    try {
+      const submitted = await submitOrder({
+        customerName,
+        phone: customerPhone,
+        deliveryMethod,
+        storeInfo: deliveryMethod === 'convenience_store' ? storeInfo : '',
+        note: orderNote,
+        items: cart,
+        privacyConsent: true,
+        turnstileToken,
+        website,
+      })
+      setReceipt(submitted)
+      setCart([])
+      setCustomerName('')
+      setCustomerPhone('')
+      setStoreInfo('')
+      setOrderNote('')
+      setPrivacyConsent(false)
+      setWebsite('')
+      setTurnstileToken('')
+      setCaptchaResetKey((key) => key + 1)
+      setShippingContact('店主會與你聯絡，確認交付方式。')
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : '訂單送出失敗，請稍後再試。')
+      setTurnstileToken('')
+      setCaptchaResetKey((key) => key + 1)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -148,9 +201,9 @@ function Storefront() {
         </section>
 
         <div className="notice-ribbon" role="note">
-          <span className="ribbon-stamp">預覽</span>
+          <span className="ribbon-stamp">現貨</span>
           <p role="status" aria-live="polite">{stockSyncText}</p>
-          <a href="/admin">查看管理介面預覽</a>
+          <span>朋友下單平台</span>
         </div>
 
         <section className="catalog-section" id="catalog" aria-labelledby="catalog-title">
@@ -217,12 +270,12 @@ function Storefront() {
         </section>
       </main>
 
-      <footer className="site-footer"><a className="footer-brand" href="/">老邱自家烘焙</a><p>{stockSyncLabel(syncState)} 出貨方式以店主確認為準。</p><a href="/admin">管理介面預覽</a></footer>
+      <footer className="site-footer"><a className="footer-brand" href="/">老邱自家烘焙</a><p>{stockSyncLabel(syncState)} 自取或超商取貨（運費 $60）；下單後由店主確認交付方式。</p><a href="tel:0975386777">聯絡老邱・0975 386 777</a></footer>
 
       <aside id="cart-panel" className={`cart-panel ${cartOpen ? 'is-open' : ''}`} aria-label="選豆單" aria-hidden={!cartOpen} inert={!cartOpen}>
         <div className="cart-heading"><div><h2>選豆單 <span>{cartCount}</span></h2></div><button type="button" className="close-panel" onClick={() => setCartOpen(false)} aria-label="關閉選豆單"><Icon name="close" /></button></div>
         {cart.length === 0 ? (
-          <div className="cart-empty"><span className="empty-mark">豆</span><h3>選豆單目前是空的</h3><p>從豆單選擇喜歡的品項，加入後會顯示在這裡。</p><a href="#catalog" onClick={() => setCartOpen(false)}>回到本期豆單 <Icon name="arrow" /></a></div>
+          receipt ? <div className="order-success" role="status"><strong>訂單已送出</strong><p>訂單編號：<span>{receipt.orderId}</span></p><p>商品小計 {priceText(receipt.subtotal)}・運費 {priceText(receipt.shipping)}・合計 {priceText(receipt.total)}</p><p>{shippingContact}</p><p>{receipt.ownerNotified ? '店主已收到電子郵件通知。' : '訂單已記錄，但通知郵件未能寄出，請直接聯絡老邱。'}</p><a href="#catalog" onClick={() => setCartOpen(false)}>回到本期豆單 <Icon name="arrow" /></a></div> : <div className="cart-empty"><span className="empty-mark">豆</span><h3>選豆單目前是空的</h3><p>從豆單選擇喜歡的品項，加入後會顯示在這裡。</p><a href="#catalog" onClick={() => setCartOpen(false)}>回到本期豆單 <Icon name="arrow" /></a></div>
         ) : (
           <>
             <ul className="cart-lines">
@@ -237,59 +290,33 @@ function Storefront() {
                 </li>
               })}
             </ul>
+            <button className="continue-shopping" type="button" onClick={() => { setCartOpen(false); document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' }) }}><Icon name="plus" />繼續選購其他豆款</button>
             <div className="cart-total"><span>商品小計</span><strong>{priceText(total)}</strong></div>
-            <div className="preview-gate"><p className="gate-title">訂單送出尚未啟用</p><p>Google 試算表串接、管理員驗證與取貨／配送規則尚未設定。此預覽不會送出或儲存任何訂單資料。</p><button type="button" disabled>確認訂單</button></div>
+            <form className="order-form" onSubmit={handleSubmitOrder}>
+              {receipt && <div className="order-success" role="status"><strong>訂單已送出</strong><p>訂單編號：<span>{receipt.orderId}</span></p><p>商品小計 {priceText(receipt.subtotal)}・運費 {priceText(receipt.shipping)}・合計 {priceText(receipt.total)}</p><p>{shippingContact}</p><p>{receipt.ownerNotified ? '店主已收到電子郵件通知。' : '訂單已記錄，但通知郵件未能寄出，請直接聯絡老邱。'}</p></div>}
+              <label className="form-field">姓名<input required maxLength={80} autoComplete="name" value={customerName} onChange={(event) => setCustomerName(event.target.value)} /></label>
+              <label className="form-field">聯絡電話<input required maxLength={20} type="tel" autoComplete="tel" inputMode="tel" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} /></label>
+              <label className="form-field">配送方式<select value={deliveryMethod} onChange={(event) => { setDeliveryMethod(event.target.value as 'pickup' | 'convenience_store'); setFormError('') }}><option value="pickup">店面自取・$0</option><option value="convenience_store">超商取貨・+$60</option></select></label>
+              {deliveryMethod === 'convenience_store' ? <label className="form-field">超商門市<input required maxLength={200} value={storeInfo} onChange={(event) => setStoreInfo(event.target.value)} placeholder="請填超商名稱、門市與店號" /></label> : <p className="form-hint">自取請於下單後聯絡老邱：<a href="tel:0975386777">0975 386 777</a></p>}
+              <label className="form-field">備註（選填）<textarea maxLength={500} value={orderNote} onChange={(event) => setOrderNote(event.target.value)} rows={3} /></label>
+              <div className="cart-total shipping-line"><span>{deliveryMethod === 'convenience_store' ? '超商運費' : '運費'}</span><strong>{priceText(shipping)}</strong></div>
+              <div className="cart-total grand-total"><span>應付總額</span><strong>{priceText(grandTotal)}</strong></div>
+              <div className="privacy-consent"><label><input type="checkbox" checked={privacyConsent} onChange={(event) => setPrivacyConsent(event.target.checked)} required /><span>我同意將姓名、電話、配送方式與門市資料用於處理本筆訂單。訂單完成 90 天後刪除聯絡與門市資料；必要帳務紀錄依法保存。</span></label></div>
+              <div className="honeypot-field" aria-hidden="true"><label>網站<input tabIndex={-1} autoComplete="off" value={website} onChange={(event) => setWebsite(event.target.value)} /></label></div>
+              <OrderCaptcha onToken={handleTurnstileToken} resetKey={captchaResetKey} />
+              {formError && <p className="order-error" role="alert">{formError}</p>}
+              <button className="submit-order" type="submit" disabled={submitting}>{submitting ? '送出中…' : '確認下單'}</button>
+            </form>
           </>
         )}
         {notice && <p className="sr-only" role="status">{notice}</p>}
       </aside>
       <p className="sr-only" role="status" aria-live="polite">{notice}</p>
-      {cartCount > 0 && <button type="button" className="mobile-cart" onClick={() => setCartOpen((open) => !open)}><Icon name="bag" />查看選豆單・{cartCount} 件 <strong>{priceText(total)}</strong></button>}
-    </div>
-  )
-}
-
-function AdminPreview() {
-  const { syncState } = useStockFeed()
-  const [orders, setOrders] = useState(demoOrders)
-  const [filter, setFilter] = useState<'all' | Status>('all')
-  const visibleOrders = orders.filter((order) => filter === 'all' || order.status === filter)
-  const counts = { all: orders.length, new: orders.filter((order) => order.status === 'new').length, working: orders.filter((order) => order.status === 'working').length, done: orders.filter((order) => order.status === 'done').length }
-
-  return (
-    <div className="site-shell admin-shell">
-      <ShopHeader cartCount={0} isAdmin />
-      <main className="admin-main">
-        <div className="admin-topline"><a href="/" className="back-link"><Icon name="arrow" />回到豆單</a><span className="preview-stamp">預覽介面</span></div>
-        <div className="admin-title"><div><h1>訂單管理</h1><p>查看示意訂單，並更新處理狀態。</p></div></div>
-        <div className="admin-warning" role="note"><strong>模擬資料</strong><p>這裡的顧客、時間與訂單皆為虛構示意，狀態變更只留在目前分頁。{stockSyncLabel(syncState)} 訂單與管理員登入尚未串接。</p></div>
-        <div className="order-filters" role="group" aria-label="訂單狀態篩選">
-          {([['all', '全部', counts.all], ['new', '待處理', counts.new], ['working', '處理中', counts.working], ['done', '已完成', counts.done]] as const).map(([key, label, count]) => (
-            <button key={key} type="button" className={filter === key ? 'order-filter active' : 'order-filter'} aria-pressed={filter === key} onClick={() => setFilter(key)}><span>{label}</span><strong>{count}</strong></button>
-          ))}
-        </div>
-        {visibleOrders.length === 0 ? <div className="empty-results"><span className="empty-mark">空</span><h2>這個狀態還沒有示意訂單</h2></div> : (
-          <ul className="order-list">
-            {visibleOrders.map((order) => <li key={order.id}>
-              <article className="order-entry">
-                <div className="order-meta"><strong>{order.id}</strong><span>{order.time}</span></div>
-                <div className="order-detail"><h2>{order.guest}</h2><ul>{order.lines.map((line) => {
-                  const product = products.find((item) => item.id === line.productId)
-                  return product ? <li key={line.productId}>{product.name}・{bagLabel(line.size)} × {line.quantity}</li> : null
-                })}</ul></div>
-                <div className="order-total"><span>商品小計</span><strong>{priceText(getCartTotal(order.lines))}</strong></div>
-                <label className="status-select-label">訂單狀態<select value={order.status} onChange={(event) => setOrders((current) => current.map((item) => item.id === order.id ? { ...item, status: event.target.value as Status } : item))}><option value="new">待處理</option><option value="working">處理中</option><option value="done">已完成</option></select></label>
-                <span className={`status-ink ${order.status}`}>{statusLabels[order.status]}</span>
-              </article>
-            </li>)}
-          </ul>
-        )}
-      </main>
-      <footer className="site-footer"><a className="footer-brand" href="/">老邱自家烘焙</a><p>管理介面正式啟用前，需先完成管理員驗證與試算表授權。</p><a href="/">回到豆單</a></footer>
+      {cartCount > 0 && <button type="button" className="cart-fab" onClick={() => setCartOpen((open) => !open)}><Icon name="bag" />查看選豆單・{cartCount} 件 <strong>{priceText(total)}</strong></button>}
     </div>
   )
 }
 
 export default function App() {
-  return window.location.pathname.replace(/\/$/, '') === '/admin' ? <AdminPreview /> : <Storefront />
+  return <Storefront />
 }
