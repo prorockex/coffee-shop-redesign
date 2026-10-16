@@ -3,6 +3,7 @@ import { canAddMore, filterProducts, getCartTotal, priceFor, type BagSize, type 
 import { parseStockFeed, stockSyncLabel, type StockSyncState } from './stock-feed'
 import { submitOrder, type OrderReceipt } from './order-client'
 import { OrderCaptcha } from './OrderCaptcha'
+import { isValidPhone, normalizePhone } from './phone'
 import './App.css'
 
 const priceText = (amount: number) => `$${amount.toLocaleString('zh-TW')}`
@@ -148,16 +149,27 @@ function Storefront() {
       setFormError('請先完成防自動送單驗證。')
       return
     }
+    const phone = normalizePhone(customerPhone)
+    if (!isValidPhone(phone)) {
+      setFormError('電話格式不正確，請填 8 到 15 位數字，例如 0912345678。')
+      return
+    }
+    const items = cart.filter((line) => availableProducts.some((product) => product.id === line.productId))
+    if (items.length !== cart.length) setCart(items)
+    if (items.length === 0) {
+      setFormError('選豆單中的商品已下架，請重新選購。')
+      return
+    }
     setSubmitting(true)
     setFormError('')
     try {
       const submitted = await submitOrder({
         customerName,
-        phone: customerPhone,
+        phone,
         deliveryMethod,
         storeInfo: deliveryMethod === 'convenience_store' ? storeInfo : '',
         note: orderNote,
-        items: cart,
+        items,
         privacyConsent: true,
         turnstileToken,
         website,
