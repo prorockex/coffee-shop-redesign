@@ -1,4 +1,5 @@
 import { priceFor, type BagSize, type CartLine } from '../../src/catalog'
+import { isValidPhone, normalizePhone } from '../../src/phone'
 import { productsFromSheetRows, SHEET_RANGE_COLUMNS } from '../../src/sheet-products'
 
 export interface Env {
@@ -54,32 +55,38 @@ async function accessToken(email: string, privateKey: string, signal: AbortSigna
   if (typeof body.access_token !== 'string') throw new Error('Invalid Google token response')
   return body.access_token
 }
-function parseOrder(value: unknown) {
-  if (!value || typeof value !== 'object') return null
+type ParsedOrder = { customerName: string; phone: string; deliveryMethod: 'pickup' | 'convenience_store'; storeInfo: string; note: string; items: SubmittedItem[]; turnstileToken: string; privacyConsent: true; website: string }
+const hasControl = (value: string, allowWhitespace = false) => Array.from(value).some((character) => {
+  const code = character.charCodeAt(0)
+  if (allowWhitespace && code >= 9 && code <= 13) return false
+  return code < 32 || (code >= 127 && code <= 159)
+})
+export function parseOrder(value: unknown): { order: ParsedOrder } | { error: string } {
+  if (!value || typeof value !== 'object') return { error: '訂單資料格式不正確。' }
   const data = value as Record<string, unknown>
   const customerName = typeof data.customerName === 'string' ? data.customerName.trim() : ''
-  const phone = typeof data.phone === 'string' ? data.phone.trim() : ''
+  const phone = normalizePhone(typeof data.phone === 'string' ? data.phone : '')
   const deliveryMethod = data.deliveryMethod
   const storeInfo = typeof data.storeInfo === 'string' ? data.storeInfo.trim() : ''
   const note = typeof data.note === 'string' ? data.note.trim() : ''
   const turnstileToken = typeof data.turnstileToken === 'string' ? data.turnstileToken.trim() : ''
   const website = typeof data.website === 'string' ? data.website.trim() : ''
-  if (customerName.length < 1 || customerName.length > 80 || Array.from(customerName).some((character) => character.charCodeAt(0) < 32 || (character.charCodeAt(0) >= 127 && character.charCodeAt(0) <= 159))) return null
-  if (!/^[0-9+()\-\s]{8,20}$/.test(phone)) return null
-  if (deliveryMethod !== 'convenience_store' && deliveryMethod !== 'pickup') return null
-  if (deliveryMethod === 'convenience_store' && (!storeInfo || storeInfo.length > 200)) return null
-  if (deliveryMethod === 'pickup' && storeInfo.length > 200) return null
-  if (note.length > 500 || Array.from(note).some((character) => character.charCodeAt(0) < 9 || (character.charCodeAt(0) > 13 && character.charCodeAt(0) < 32) || (character.charCodeAt(0) >= 127 && character.charCodeAt(0) <= 159))) return null
-  if (!Array.isArray(data.items) || data.items.length < 1 || data.items.length > 30) return null
+  if (customerName.length < 1 || customerName.length > 80 || hasControl(customerName)) return { error: '請填寫姓名（80 字以內）。' }
+  if (!isValidPhone(phone)) return { error: '電話格式不正確，請填 8 到 15 位數字，例如 0912345678。' }
+  if (deliveryMethod !== 'convenience_store' && deliveryMethod !== 'pickup') return { error: '請選擇配送方式。' }
+  if (deliveryMethod === 'convenience_store' && !storeInfo) return { error: '請填寫超商門市。' }
+  if (storeInfo.length > 200 || hasControl(storeInfo)) return { error: '超商門市資料請在 200 字以內。' }
+  if (note.length > 500 || hasControl(note, true)) return { error: '備註請在 500 字以內。' }
+  if (!Array.isArray(data.items) || data.items.length < 1 || data.items.length > 30) return { error: '選豆單是空的或品項過多，請重新選購。' }
   const items: SubmittedItem[] = []
   for (const entry of data.items) {
-    if (!entry || typeof entry !== 'object') return null
-    const line = entry as Record<string, unknown>
-    if (typeof line.productId !== 'string' || (line.size !== 'half' && line.size !== 'one') || !Number.isInteger(line.quantity) || Number(line.quantity) < 1 || Number(line.quantity) > 20) return null
+    const line = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    if (typeof line.productId !== 'string' || (line.size !== 'half' && line.size !== 'one') || !Number.isInteger(line.quantity) || Number(line.quantity) < 1 || Number(line.quantity) > 20) return { error: '選豆單中的商品資料有誤，請清空後重新加入。' }
     items.push({ productId: line.productId, size: line.size as BagSize, quantity: Number(line.quantity) })
   }
-  if (!turnstileToken || turnstileToken.length > 4096 || data.privacyConsent !== true) return null
-  return { customerName, phone, deliveryMethod, storeInfo, note, items, turnstileToken, privacyConsent: true, website }
+  if (data.privacyConsent !== true) return { error: '請勾選個資使用同意。' }
+  if (!turnstileToken || turnstileToken.length > 4096) return { error: '請先完成防自動送單驗證。' }
+  return { order: { customerName, phone, deliveryMethod, storeInfo, note, items, turnstileToken, privacyConsent: true, website } }
 }
 
 function isAppsScriptWebAppUrl(value: string): boolean {
@@ -98,8 +105,9 @@ export async function onRequestPost({ request, env }: PagesContext): Promise<Res
   if (Number(request.headers.get('content-length') || 0) > MAX_BODY) return json({ error: '訂單資料超過限制。' }, 413)
   let raw: unknown
   try { raw = await request.json() } catch { return json({ error: '訂單資料格式不正確。' }, 400) }
-  const order = parseOrder(raw)
-  if (!order) return json({ error: '請檢查姓名、電話、商品與個資同意欄位。' }, 400)
+  const parsed = parseOrder(raw)
+  if ('error' in parsed) return json({ error: parsed.error }, 400)
+  const order = parsed.order
   if (order.website) return json({ ok: true }, 202)
   const email = env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim()
   const privateKey = env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.trim()
