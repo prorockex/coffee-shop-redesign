@@ -1,3 +1,6 @@
+import { productsFromSheetRows, SHEET_RANGE_COLUMNS } from '../../src/sheet-products'
+export { isListed } from '../../src/sheet-products'
+
 export interface Env {
   GOOGLE_SERVICE_ACCOUNT_EMAIL?: string
   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?: string
@@ -123,9 +126,10 @@ export async function onRequestGet({ request, env, waitUntil }: PagesContext): P
   try {
     const token = await getAccessToken(email, privateKey, request.signal)
     const escapedTab = sheetTab.replace(/'/g, "''")
-    const range = `'${escapedTab}'!A2:A1000`
+    const range = `'${escapedTab}'!${SHEET_RANGE_COLUMNS}`
     const url = new URL(`${SHEETS_API}/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(range)}`)
     url.searchParams.set('majorDimension', 'ROWS')
+    url.searchParams.set('valueRenderOption', 'UNFORMATTED_VALUE')
     const response = await fetch(url, {
       headers: { authorization: `Bearer ${token}` },
       signal: request.signal,
@@ -134,15 +138,9 @@ export async function onRequestGet({ request, env, waitUntil }: PagesContext): P
 
     const sheetData = await response.json() as { values?: unknown }
     const values = Array.isArray(sheetData.values) ? sheetData.values : []
-    const stockCodes = [...new Set(values.flatMap((row) => {
-      if (!Array.isArray(row)) return []
-      const value = row[0]
-      if (typeof value !== 'string' && typeof value !== 'number') return []
-      const code = String(value).trim()
-      return code ? [code] : []
-    }))]
+    const listedProducts = productsFromSheetRows(values)
 
-    const result = jsonResponse({ stockCodes, checkedAt: new Date().toISOString() }, 200, CACHE_CONTROL)
+    const result = jsonResponse({ products: listedProducts, checkedAt: new Date().toISOString() }, 200, CACHE_CONTROL)
     if (cache) {
       const write = cache.put(cacheKey, result.clone()).catch(() => undefined)
       if (waitUntil) waitUntil(write)

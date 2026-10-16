@@ -21,7 +21,7 @@ When Tailscale is connected, start the dev server on this Mac’s Tailscale inte
 
 ## What works in this preview
 
-- Show the 6 products with a non-empty ID in the latest read of Google Sheets `Products` column A; blank-ID items are hidden. All 27 sheet names matched the catalog.
+- Show the 6 products whose `Products` column I (上架 checkbox) is checked; unchecked/blank rows are hidden (snapshot fallback reflects the last read). All 27 sheet names matched the catalog.
 - Search visible products by product, origin, processing method, or tasting notes.
 - Filter by processing method; choose half-pound/one-pound pricing and build a cart.
 - Inspect calculated subtotals and change quantities.
@@ -33,7 +33,7 @@ This is a local preview. Checkout is intentionally disabled; the app sends and s
 
 ### Activate automatic stock sync
 
-`functions/api/stock.ts` reads only `Products!A2:A1000` with the Google Sheets `spreadsheets.readonly` scope and returns only non-empty stock IDs from `/api/stock`. The storefront requests this feed on page load and every 30 seconds; sold-out products are hidden and removed from the cart. The feed never reads or returns customer/order tabs, names, prices, or other columns.
+`functions/api/stock.ts` reads only `Products!A2:I1000` (UNFORMATTED_VALUE) with the Google Sheets `spreadsheets.readonly` scope and returns the column-A IDs of rows whose column I checkbox is TRUE from `/api/stock`. The storefront requests this feed on page load and every 30 seconds; sold-out products are hidden and removed from the cart. The feed never reads or returns customer/order tabs, names, prices, or other columns.
 
 To activate it, deploy the project as Cloudflare Pages with Functions enabled, create a dedicated Google Cloud service account with the Sheets API enabled, and share only the inventory spreadsheet with that account as Viewer. Configure these Cloudflare variables/secrets: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` (secret), `STOCK_SHEET_ID`, and optional `STOCK_SHEET_TAB` (defaults to `Products`). Keep private-key material in Cloudflare secrets or an ignored local `.dev.vars` file—never in source control or chat. The current Tailscale/Vite preview does not run Pages Functions, so it continues to display the fallback snapshot until a Pages runtime is configured.
 
@@ -43,8 +43,13 @@ Before the site accepts orders, configure a separate server-side order integrati
 
 The source XLSX is deliberately kept outside this repository: it contains existing customer/order records in addition to the product catalog. The XLSX product fields are in `src/catalog.ts`; six availability IDs from the separate Google Sheet stock snapshot are the offline fallback. The original workbook, customer details, and legacy orders are not included in the app or build output. `.gitignore` excludes spreadsheet files and local environment secrets. Keep the GitHub repository private; only publish the storefront after the integration and launch checks are complete.
 
-Availability is determined by the `Products` sheet's first column (`ID`): a non-empty ID means in stock; a blank cell means sold out and is omitted. The latest verified snapshot has 6 available and 21 sold-out products. Automatic sync is implemented in the Pages Function but remains inactive until the service account and Cloudflare deployment are configured.
+Availability is determined by the `Products` sheet's column I (上架 checkbox): TRUE means listed; unchecked or blank means hidden. Column A (`ID`) maps rows to catalog products. The latest verified snapshot has 6 available and 21 sold-out products. Automatic sync is implemented in the Pages Function but remains inactive until the service account and Cloudflare deployment are configured.
 
 ## Typography and artwork
 
 The hero uses an original generated paper-sculpture coffee illustration at `public/hero-paper-sculpture.png`; its exact generation prompt is embedded in the PNG metadata. The interface uses the system sans-serif stack and requires no remote fonts.
+
+
+## Listing rule (2026-10-16)
+
+The storefront list comes only from the `Products` sheet: every row whose column I (`上架` checkbox) is TRUE is shown, using B 名稱, C 產區, D 豆種, E 處理法, F 風味描述, G 半磅價格, H 一磅價格 from that row. Column A (ID) is not used. A new bean = new sheet row + tick, no code change. Missing fields are filled from the static catalog in `src/catalog.ts` by normalized name when possible; rows without a name or prices are skipped. `/api/stock` returns `{ products, checkedAt }`; `/api/orders` re-reads the sheet and prices items from it. If the feed fails before any success the page shows an error state (no static fallback, to avoid selling unlisted beans); after a success it keeps the last list.

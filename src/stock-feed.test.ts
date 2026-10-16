@@ -2,21 +2,21 @@ import { describe, expect, it } from 'vitest'
 import { parseStockFeed, stockSyncLabel } from './stock-feed'
 
 describe('stock feed payload', () => {
-  it('trims and deduplicates stock IDs from the server response', () => {
-    expect(parseStockFeed({ stockCodes: [' p022 ', '', 'p023', 'p022'], checkedAt: '2026-10-06T00:00:00.000Z' })).toEqual({
-      stockCodes: ['p022', 'p023'],
-      checkedAt: '2026-10-06T00:00:00.000Z',
-    })
+  const product = { id: '肯亞 AA FAQ', name: '肯亞 AA FAQ', origin: '肯亞', process: '水洗', flavor: '烏梅', priceHalf: 330, priceOne: 650, inventoryStatus: 'listed' }
+
+  it('accepts a product list from the server response', () => {
+    expect(parseStockFeed({ products: [product], checkedAt: '2026-10-06T00:00:00.000Z' })).toEqual({ products: [product], checkedAt: '2026-10-06T00:00:00.000Z' })
   })
 
-  it('rejects malformed responses instead of treating them as an empty stock list', () => {
-    expect(() => parseStockFeed({ stockCodes: ['p022', null] })).toThrow()
-    expect(() => parseStockFeed({ stockCodes: 'p022' })).toThrow()
+  it('rejects malformed responses instead of treating them as an empty list', () => {
+    expect(() => parseStockFeed({ products: [{ ...product, priceHalf: '330' }], checkedAt: '2026-10-06T00:00:00.000Z' })).toThrow()
+    expect(() => parseStockFeed({ stockCodes: ['p022'], checkedAt: '2026-10-06T00:00:00.000Z' })).toThrow()
   })
 
   it('labels live, stale, and snapshot inventory states honestly', () => {
     expect(stockSyncLabel('live')).toContain('已與 Google 試算表同步')
     expect(stockSyncLabel('stale')).toContain('沿用最近一次成功')
-    expect(stockSyncLabel('snapshot')).toContain('尚未連接即時同步')
+    expect(stockSyncLabel('loading')).toContain('正在讀取')
+    expect(stockSyncLabel('error')).toContain('暫時無法讀取')
   })
 })

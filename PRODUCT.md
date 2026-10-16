@@ -33,8 +33,8 @@ Customers browse products, select quantities, provide order details, and submit 
 - Orders should be written to the existing Google Sheet; no online payment is required.
 - The user supplied an XLSX workbook whose `Products` sheet has 27 coffee listings with origin, processing, tasting notes, half-pound and one-pound prices. Treat those as the provided catalogue source; preserve its facts and mark any missing field as unknown.
 - The workbook also contains customer/order information. Never copy that workbook, its orders, or customer details into the website repository, build output, or public hosting. Only the product fields needed for the storefront may be transcribed.
-- Read-only access to the inventory Google Sheet is verified for its `Products` tab. A Cloudflare Pages Function is implemented to expose only non-empty IDs from `Products!A2:A1000`, but Cloudflare deployment and dedicated service-account secrets are not configured, so the live endpoint is not active. Order writes, the order destination, and admin authentication remain unverified.
-- Availability follows `Products!A:A` (`ID`): any non-empty ID means in stock; blank means sold out and must be hidden. The latest verified snapshot has 6 available and 21 sold out, mapped to all 27 catalog entries. The storefront polls the prepared endpoint every 30 seconds when deployed and otherwise falls back to the snapshot; ignore historical quantity notes embedded in product names.
+- Read-only access to the inventory Google Sheet is verified for its `Products` tab. A Cloudflare Pages Function is implemented to expose only the IDs (column A) of rows whose column I checkbox is TRUE in `Products!A2:I1000`, but Cloudflare deployment and dedicated service-account secrets are not configured, so the live endpoint is not active. Order writes, the order destination, and admin authentication remain unverified.
+- Availability follows `Products` column I (上架 checkbox): TRUE means listed; unchecked/blank means hidden. Column A (`ID`) identifies the product. The latest verified snapshot has 6 available and 21 sold out, mapped to all 27 catalog entries. The storefront polls the prepared endpoint every 30 seconds when deployed and otherwise falls back to the snapshot; ignore historical quantity notes embedded in product names.
 - Shipping/pickup rules, order fields, and status workflow remain open until the owner confirms production behavior.
 - Do not publish fake product/pricing claims or transmit customer data to an unconfigured endpoint.
 - GitHub source repository should be private. User authorized a publicly accessible customer storefront, but did not authorize a public source repository.
@@ -62,3 +62,8 @@ Customers browse products, select quantities, provide order details, and submit 
 4. Make order status visible and manageable to the owner.
 5. Never imply payment, inventory, or order persistence is live until it has been verified.
 6. Keep the private source repository private; the rendered storefront may be public only after the owner confirms the launch-ready catalogue and order destination.
+
+
+## Listing rule (2026-10-16)
+
+The storefront list comes only from the `Products` sheet: every row whose column I (`上架` checkbox) is TRUE is shown, using B 名稱, C 產區, D 豆種, E 處理法, F 風味描述, G 半磅價格, H 一磅價格 from that row. Column A (ID) is not used. A new bean = new sheet row + tick, no code change. Missing fields are filled from the static catalog in `src/catalog.ts` by normalized name when possible; rows without a name or prices are skipped. `/api/stock` returns `{ products, checkedAt }`; `/api/orders` re-reads the sheet and prices items from it. If the feed fails before any success the page shows an error state (no static fallback, to avoid selling unlisted beans); after a success it keeps the last list.
