@@ -145,6 +145,24 @@ function sendOrderNotification_(order) {
   });
 }
 
+/** 在 Apps Script 編輯器手動執行：觸發寄信權限授權，並寄一封測試信到 ORDER_NOTIFICATION_EMAIL。不會寫入試算表。 */
+function testOrderEmail() {
+  sendOrderNotification_({
+    orderId: 'TEST-' + new Date().getTime(),
+    createdAt: new Date().toISOString(),
+    customerName: '測試顧客（非真實訂單）',
+    phone: '0900000000',
+    deliveryMethod: 'pickup',
+    storeInfo: '',
+    items: [{ name: '測試咖啡豆', size: 'half', quantity: 1, unitPrice: 1 }],
+    subtotal: 1,
+    shipping: 0,
+    total: 1,
+    note: '這是 testOrderEmail 寄出的測試信'
+  });
+  console.log('Test email sent to ' + ORDER_NOTIFICATION_EMAIL);
+}
+
 function formatOrderItemsSummary_(items) {
   return items.map(function(item) {
     const sizeLabel = item.size === 'half' ? '半磅' : '一磅';
