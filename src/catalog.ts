@@ -13,7 +13,14 @@ export type Product = {
   inventoryStatus: InventoryStatus
 }
 
-export type CartLine = { productId: string; size: BagSize; quantity: number }
+export type CartLine = {
+  productId: string
+  size: BagSize
+  quantity: number
+  /** Front-end prototype only. Omitted on the order payload sent to /api/orders. */
+  fulfillment?: 'stock' | 'roast-to-order'
+  roastLevel?: 'light' | 'medium' | 'dark'
+}
 
 export const products: Product[] = [
   { id: 'ethiopia-angel-geisha', name: '衣索比亞 天使藝妓', origin: '衣索比亞', bean: '藝妓', process: '水洗', flavor: '杏桃、白花、蘋果、紅莓、甜橙', priceHalf: 350, priceOne: 690, inventoryStatus: 'listed' },

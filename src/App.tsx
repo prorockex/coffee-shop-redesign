@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { canAddMore, filterProducts, getCartTotal, priceFor, type BagSize, type CartLine, type Product } from './catalog'
+import { changeLineQuantity, fulfillmentSummary, isRoastLevel, lineFulfillment, lineMatchKey, retargetCartLine, ROAST_FRESH_NOTE, ROAST_LEVELS, roastLevelLabel, roastShipEstimate, roastShipRange, upsertCartLine, type BeanFulfillment, type RoastLevel } from './roast-to-order'
 import { parseStockFeed, stockSyncLabel, type StockSyncState } from './stock-feed'
 import { submitOrder, type OrderReceipt } from './order-client'
 import { OrderCaptcha } from './OrderCaptcha'
@@ -26,9 +27,10 @@ function useStockFeed(onProducts?: (items: readonly Product[]) => void) {
         if (!response.ok) throw new Error('Stock feed unavailable')
         const feed = parseStockFeed(await response.json())
         if (!mounted) return
+        const illustrative = response.headers.get('x-stock-illustrative') === '1'
         setLiveProducts(feed.products)
         setCheckedAt(feed.checkedAt)
-        setSyncState('live')
+        setSyncState(illustrative ? 'illustrative' : 'live')
         onProducts?.(feed.products)
       } catch {
         if (mounted) setSyncState((current) => current === 'live' || current === 'stale' ? 'stale' : 'error')
@@ -48,7 +50,7 @@ function useStockFeed(onProducts?: (items: readonly Product[]) => void) {
   return { liveProducts, syncState, checkedAt }
 }
 
-function ShopHeader({ cartCount, onCart, cartOpen = false }: { cartCount: number; onCart?: () => void; cartOpen?: boolean }) {
+function ShopHeader({ cartCount, onCart, cartOpen = false, onCatalog }: { cartCount: number; onCart?: () => void; cartOpen?: boolean; onCatalog?: () => void }) {
   return (
     <header className="masthead">
       <a className="brand" href="/" aria-label="老邱自家烘焙首頁">
@@ -56,7 +58,7 @@ function ShopHeader({ cartCount, onCart, cartOpen = false }: { cartCount: number
         <span className="brand-name"><strong>老邱自家烘焙</strong></span>
       </a>
       <nav className="main-nav" aria-label="主要導覽">
-        <a href="#catalog">選豆</a>
+        <a href="#catalog" onClick={onCatalog}>選豆</a>
       </nav>
       {onCart && (
         <button className="cart-trigger" type="button" onClick={onCart} aria-controls="cart-panel" aria-expanded={cartOpen}>
@@ -77,10 +79,97 @@ function Icon({ name }: { name: 'bag' | 'search' | 'arrow' | 'plus' | 'minus' | 
   return <svg {...common}><path d="m6 6 12 12M18 6 6 18" /></svg>
 }
 
+type RoastDraft = { fulfillment: BeanFulfillment; roastLevel: RoastLevel | null }
+
+function RoastOptions({ name, fulfillment, roastLevel, onFulfillment, onRoastLevel, variant }: {
+  name: string
+  fulfillment: BeanFulfillment
+  roastLevel: RoastLevel | null
+  onFulfillment: (value: BeanFulfillment) => void
+  onRoastLevel: (value: RoastLevel) => void
+  variant: 'page' | 'cart'
+}) {
+  const roastOn = fulfillment === 'roast-to-order'
+  const estimate = roastShipEstimate()
+  const pageNote = `${ROAST_FRESH_NOTE.slice(0, -1)}（${roastShipRange()}）。此日期為示意，實際出貨由店主確認。`
+  return (
+    <div className={variant === 'cart' ? 'roast-options is-cart' : 'roast-options'}>
+      <fieldset className="option-block">
+        <legend>烘焙方式</legend>
+        <div className="option-choice cols-2" role="group" aria-label={`${name}烘焙方式`}>
+          <button type="button" aria-pressed={!roastOn} onClick={() => onFulfillment('stock')}>現貨</button>
+          <button type="button" aria-pressed={roastOn} onClick={() => onFulfillment('roast-to-order')}>現點現烘</button>
+        </div>
+      </fieldset>
+      {roastOn && (
+        <fieldset className="option-block">
+          <legend>烘焙度</legend>
+          <div className="option-choice cols-3" role="group" aria-label={`${name}烘焙度`}>
+            {ROAST_LEVELS.map((level) => (
+              <button key={level.id} type="button" aria-pressed={roastLevel === level.id} onClick={() => onRoastLevel(level.id)}>{level.label}</button>
+            ))}
+          </div>
+          <p className="roast-note">
+            <span className="ribbon-stamp">示意</span>
+            <span>{variant === 'page' ? pageNote : `下單後現烘。${estimate}此日期為示意，實際出貨由店主確認。`}</span>
+          </p>
+        </fieldset>
+      )}
+    </div>
+  )
+}
+
+function ProductPage({ product, indexLabel, size, onSize, draft, onDraft, onAdd, onBack }: {
+  product: Product
+  indexLabel: string
+  size: BagSize
+  onSize: (size: BagSize) => void
+  draft: RoastDraft
+  onDraft: (patch: Partial<RoastDraft>) => void
+  onAdd: () => void
+  onBack: () => void
+}) {
+  const needsRoastLevel = draft.fulfillment === 'roast-to-order' && !draft.roastLevel
+  return (
+    <section className="product-page" aria-labelledby="product-title">
+      <button type="button" className="back-link product-back" onClick={onBack}><Icon name="arrow" />回到本期豆單</button>
+      <div className="product-layout">
+        <div className="product-story">
+          <p className="small-overline">COFFEE INDEX · {indexLabel}</p>
+          <div className="product-tags"><span>{product.origin}</span><span>{product.process}</span>{product.bean && <span>{product.bean}</span>}</div>
+          <h1 id="product-title" tabIndex={-1}>{product.name}</h1>
+          <p className="flavor-note">{product.flavor}</p>
+        </div>
+        <div className="product-buy">
+          <p className="option-label" aria-hidden="true">選擇重量</p>
+          <fieldset className="size-choice">
+            <legend>選擇重量</legend>
+            <button type="button" aria-pressed={size === 'half'} onClick={() => onSize('half')}><span>半磅</span><strong>{priceText(product.priceHalf)}</strong></button>
+            <button type="button" aria-pressed={size === 'one'} onClick={() => onSize('one')}><span>一磅</span><strong>{priceText(product.priceOne)}</strong></button>
+          </fieldset>
+          <RoastOptions
+            name={product.name}
+            fulfillment={draft.fulfillment}
+            roastLevel={draft.roastLevel}
+            onFulfillment={(fulfillment) => onDraft({ fulfillment })}
+            onRoastLevel={(roastLevel) => onDraft({ roastLevel, fulfillment: 'roast-to-order' })}
+            variant="page"
+          />
+          <button className="add-button" type="button" disabled={needsRoastLevel} onClick={onAdd}>
+            {needsRoastLevel ? '請先選擇烘焙度' : <><Icon name="plus" />加入選豆單</>}
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function Storefront() {
   const [query, setQuery] = useState('')
   const [processFilter, setProcessFilter] = useState('全部')
   const [sizes, setSizes] = useState<Record<string, BagSize>>({})
+  const [viewProductId, setViewProductId] = useState<string | null>(null)
+  const [roastDrafts, setRoastDrafts] = useState<Record<string, RoastDraft>>({})
   const [cart, setCart] = useState<CartLine[]>([])
   const [cartOpen, setCartOpen] = useState(false)
   const [notice, setNotice] = useState('')
@@ -106,37 +195,70 @@ function Storefront() {
   const { liveProducts: availableProducts, syncState, checkedAt } = useStockFeed(handleStockUpdate)
 
   const filtered = useMemo(() => filterProducts(availableProducts, query).filter((product) => processFilter === '全部' || product.process.includes(processFilter)), [availableProducts, query, processFilter])
+  const viewProduct = viewProductId ? availableProducts.find((product) => product.id === viewProductId) ?? null : null
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0)
   const total = getCartTotal(cart, availableProducts)
   const syncTime = checkedAt ? new Date(checkedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : ''
-  const stockSyncText = `${stockSyncLabel(syncState)}${syncTime ? ` 最近檢查 ${syncTime}。` : ''} 下單後由店主與你確認交付方式。`
+  const stockSyncText = syncState === 'illustrative'
+    ? `${stockSyncLabel(syncState)} 下單後由店主與你確認交付方式。`
+    : `${stockSyncLabel(syncState)}${syncTime ? ` 最近檢查 ${syncTime}。` : ''} 下單後由店主與你確認交付方式。`
   const shipping = deliveryMethod === 'convenience_store' ? 60 : 0
   const grandTotal = total + shipping
   const handleTurnstileToken = useCallback((token: string) => setTurnstileToken(token), [])
 
-  function addProduct(product: Product) {
+  function draftFor(productId: string): RoastDraft {
+    return roastDrafts[productId] ?? { fulfillment: 'stock', roastLevel: null }
+  }
+
+  function openProduct(productId: string, fulfillment?: BeanFulfillment) {
+    if (fulfillment) {
+      setRoastDrafts((current) => {
+        const prev = current[productId] ?? { fulfillment: 'stock' as const, roastLevel: null }
+        return { ...current, [productId]: { ...prev, fulfillment } }
+      })
+    }
+    setViewProductId(productId)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function addProduct(product: Product, options?: { draft?: RoastDraft; openCart?: boolean }) {
     setReceipt(null)
     setShippingContact('')
     const size = sizes[product.id] ?? 'half'
+    const draft = options?.draft
+    const fulfillment = draft?.fulfillment ?? 'stock'
+    if (fulfillment === 'roast-to-order' && !isRoastLevel(draft?.roastLevel)) {
+      setNotice('請先選擇烘焙度。')
+      return
+    }
     if (!canAddMore(cart, product, size, 1)) {
       setNotice('這款目前暫不開放加入選豆單。')
       return
     }
-    setCart((current) => {
-      const found = current.find((line) => line.productId === product.id && line.size === size)
-      if (found) return current.map((line) => line === found ? { ...line, quantity: line.quantity + 1 } : line)
-      return [...current, { productId: product.id, size, quantity: 1 }]
-    })
-    setNotice(`已將「${product.name}」加入選豆單。`)
-    setCartOpen(false)
+    const addition: CartLine = {
+      productId: product.id,
+      size,
+      quantity: 1,
+      fulfillment,
+      ...(fulfillment === 'roast-to-order' && isRoastLevel(draft?.roastLevel) ? { roastLevel: draft.roastLevel } : {}),
+    }
+    setCart((current) => upsertCartLine(current, addition))
+    const roastText = fulfillment === 'roast-to-order' && isRoastLevel(draft?.roastLevel) ? `（現點現烘・${roastLevelLabel(draft.roastLevel)}）` : ''
+    setNotice(`已將「${product.name}」${roastText}加入選豆單。`)
+    setCartOpen(Boolean(options?.openCart))
   }
 
   function changeQuantity(line: CartLine, delta: number) {
-    setCart((current) => current.flatMap((item) => {
-      if (item.productId !== line.productId || item.size !== line.size) return [item]
-      const quantity = item.quantity + delta
-      return quantity > 0 ? [{ ...item, quantity }] : []
-    }))
+    setCart((current) => changeLineQuantity(current, line, delta))
+  }
+
+  function setLineFulfillment(line: CartLine, fulfillment: BeanFulfillment) {
+    const roastLevel = fulfillment === 'roast-to-order' ? (isRoastLevel(line.roastLevel) ? line.roastLevel : 'medium') : null
+    setCart((current) => retargetCartLine(current, line, fulfillment, roastLevel))
+  }
+
+  function setLineRoast(line: CartLine, roastLevel: RoastLevel) {
+    setCart((current) => retargetCartLine(current, line, 'roast-to-order', roastLevel))
   }
 
   async function handleSubmitOrder(event: FormEvent<HTMLFormElement>) {
@@ -169,7 +291,7 @@ function Storefront() {
         deliveryMethod,
         storeInfo: deliveryMethod === 'convenience_store' ? storeInfo : '',
         note: orderNote,
-        items,
+        items: items.map(({ productId, size, quantity }) => ({ productId, size, quantity })),
         privacyConsent: true,
         turnstileToken,
         website,
@@ -196,9 +318,9 @@ function Storefront() {
 
   return (
     <div className="site-shell">
-      <ShopHeader cartCount={cartCount} onCart={() => setCartOpen((open) => !open)} cartOpen={cartOpen} />
+      <ShopHeader cartCount={cartCount} onCart={() => setCartOpen((open) => !open)} cartOpen={cartOpen} onCatalog={() => setViewProductId(null)} />
       <main>
-        <section className="hero-edition" aria-labelledby="hero-title">
+        {!viewProduct && <section className="hero-edition" aria-labelledby="hero-title">
           <div className="hero-copy">
             <h1 id="hero-title">今天，想喝哪一支咖啡？</h1>
             <p className="hero-description">從產地、處理法與風味，慢慢挑一支合心意的咖啡豆。</p>
@@ -206,15 +328,29 @@ function Storefront() {
             <p className="edition-note">半磅與一磅規格・價格清楚列明</p>
           </div>
           <figure className="hero-artwork"><img className="hero-plate" src="/hero-paper-sculpture.png" alt="以紙雕呈現的咖啡枝葉、成熟咖啡果與烘焙咖啡豆" /></figure>
-        </section>
+        </section>}
 
         <div className="notice-ribbon" role="note">
-          <span className="ribbon-stamp">現貨</span>
+          <span className="ribbon-stamp">{syncState === 'illustrative' ? '示意' : '現貨'}</span>
           <p role="status" aria-live="polite">{stockSyncText}</p>
           <span>朋友下單平台</span>
         </div>
 
-        <section className="catalog-section" id="catalog" aria-labelledby="catalog-title">
+        {viewProduct ? (
+          <ProductPage
+            product={viewProduct}
+            indexLabel={String(availableProducts.findIndex((item) => item.id === viewProduct.id) + 1).padStart(2, '0')}
+            size={sizes[viewProduct.id] ?? 'half'}
+            onSize={(size) => setSizes((current) => ({ ...current, [viewProduct.id]: size }))}
+            draft={draftFor(viewProduct.id)}
+            onDraft={(patch) => setRoastDrafts((current) => {
+              const prev = current[viewProduct.id] ?? { fulfillment: 'stock' as const, roastLevel: null }
+              return { ...current, [viewProduct.id]: { ...prev, ...patch } }
+            })}
+            onAdd={() => addProduct(viewProduct, { draft: draftFor(viewProduct.id), openCart: true })}
+            onBack={() => { setViewProductId(null); window.requestAnimationFrame(() => document.getElementById('catalog')?.scrollIntoView()) }}
+          />
+        ) : <section className="catalog-section" id="catalog" aria-labelledby="catalog-title">
           <div className="catalog-heading">
             <div>
               <h2 id="catalog-title">本期豆單</h2>
@@ -249,7 +385,7 @@ function Storefront() {
                       <div className="entry-index"><span>{String(index + 1).padStart(2, '0')}</span><i aria-hidden="true" /></div>
                       <div className="entry-copy">
                         <div className="product-tags"><span>{product.origin}</span><span>{product.process}</span>{product.bean && <span>{product.bean}</span>}</div>
-                        <h3>{product.name}</h3>
+                        {needsReview ? <h3>{product.name}</h3> : <h3><button type="button" className="product-title-button" onClick={() => openProduct(product.id)}>{product.name}</button></h3>}
                         <p className="flavor-note">{product.flavor}</p>
                         {needsReview && <p className="inventory-note">原商品名稱帶有庫存註記，店主確認前暫不供選購。</p>}
                       </div>
@@ -266,6 +402,7 @@ function Storefront() {
                         <button className="add-button" type="button" disabled={needsReview} onClick={() => addProduct(product)}>
                           {needsReview ? '庫存待確認' : <><Icon name="plus" />加入選豆單</>}
                         </button>
+                        {!needsReview && <button type="button" className="roast-entry" onClick={() => openProduct(product.id, 'roast-to-order')}>選擇現點現烘</button>}
                       </div>
                     </article>
                   </li>
@@ -275,7 +412,7 @@ function Storefront() {
           ) : (
             <div className="empty-results"><span className="empty-mark">空</span><h3>沒有找到符合的咖啡</h3><p>試試別的產地、處理法或風味關鍵字。</p><button type="button" className="text-button" onClick={() => { setQuery(''); setProcessFilter('全部') }}>清除篩選 <Icon name="arrow" /></button></div>
           )}
-        </section>
+        </section>}
       </main>
 
       <footer className="site-footer"><a className="footer-brand" href="/">老邱自家烘焙</a><p>{stockSyncLabel(syncState)} 自取或超商取貨（運費 $60）；下單後由店主確認交付方式。</p><a href="tel:0975386777">聯絡老邱・0975 386 777</a></footer>
@@ -283,22 +420,49 @@ function Storefront() {
       <aside id="cart-panel" className={`cart-panel ${cartOpen ? 'is-open' : ''}`} aria-label="選豆單" aria-hidden={!cartOpen} inert={!cartOpen}>
         <div className="cart-heading"><div><h2>選豆單 <span>{cartCount}</span></h2></div><button type="button" className="close-panel" onClick={() => setCartOpen(false)} aria-label="關閉選豆單"><Icon name="close" /></button></div>
         {cart.length === 0 ? (
-          receipt ? <div className="order-success" role="status"><strong>訂單已送出</strong><p>訂單編號：<span>{receipt.orderId}</span></p><p>商品小計 {priceText(receipt.subtotal)}・運費 {priceText(receipt.shipping)}・合計 {priceText(receipt.total)}</p><p>{shippingContact}</p><p>{receipt.ownerNotified ? '店主已收到電子郵件通知。' : '訂單已記錄，但通知郵件未能寄出，請直接聯絡老邱。'}</p><a href="#catalog" onClick={() => setCartOpen(false)}>回到本期豆單 <Icon name="arrow" /></a></div> : <div className="cart-empty"><span className="empty-mark">豆</span><h3>選豆單目前是空的</h3><p>從豆單選擇喜歡的品項，加入後會顯示在這裡。</p><a href="#catalog" onClick={() => setCartOpen(false)}>回到本期豆單 <Icon name="arrow" /></a></div>
+          receipt ? <div className="order-success" role="status"><strong>訂單已送出</strong><p>訂單編號：<span>{receipt.orderId}</span></p><p>商品小計 {priceText(receipt.subtotal)}・運費 {priceText(receipt.shipping)}・合計 {priceText(receipt.total)}</p><p>{shippingContact}</p><p>{receipt.ownerNotified ? '店主已收到電子郵件通知。' : '訂單已記錄，但通知郵件未能寄出，請直接聯絡老邱。'}</p><a href="#catalog" onClick={() => { setCartOpen(false); setViewProductId(null) }}>回到本期豆單 <Icon name="arrow" /></a></div> : <div className="cart-empty"><span className="empty-mark">豆</span><h3>選豆單目前是空的</h3><p>從豆單選擇喜歡的品項，加入後會顯示在這裡。</p><a href="#catalog" onClick={() => { setCartOpen(false); setViewProductId(null) }}>回到本期豆單 <Icon name="arrow" /></a></div>
         ) : (
           <>
             <ul className="cart-lines">
               {cart.map((line) => {
                 const product = availableProducts.find((item) => item.id === line.productId)
                 if (!product) return null
-                return <li key={`${line.productId}-${line.size}`} className="cart-line">
-                  <div><h3>{product.name}</h3><p>{bagLabel(line.size)}・{priceText(priceFor(product, line.size))}／袋</p></div>
+                return <li key={lineMatchKey(line)} className="cart-line">
+                  <div className="cart-line-copy">
+                    <h3>{product.name}</h3>
+                    <p>{bagLabel(line.size)}・{priceText(priceFor(product, line.size))}／袋・{fulfillmentSummary(line)}</p>
+                    <RoastOptions
+                      name={product.name}
+                      fulfillment={lineFulfillment(line)}
+                      roastLevel={isRoastLevel(line.roastLevel) ? line.roastLevel : null}
+                      onFulfillment={(value) => setLineFulfillment(line, value)}
+                      onRoastLevel={(level) => setLineRoast(line, level)}
+                      variant="cart"
+                    />
+                  </div>
                   <div className="quantity-control" aria-label={`${product.name}數量`}>
                     <button type="button" onClick={() => changeQuantity(line, -1)} aria-label={`減少${product.name}`}><Icon name="minus" /></button><span>{line.quantity}</span><button type="button" onClick={() => changeQuantity(line, 1)} aria-label={`增加${product.name}`}><Icon name="plus" /></button>
                   </div>
                 </li>
               })}
             </ul>
-            <button className="continue-shopping" type="button" onClick={() => { setCartOpen(false); document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' }) }}><Icon name="plus" />繼續選購其他豆款</button>
+            <section className="order-summary" aria-label="訂單摘要">
+              <h3>訂單摘要</h3>
+              <ul>
+                {cart.map((line) => {
+                  const product = availableProducts.find((item) => item.id === line.productId)
+                  if (!product) return null
+                  const roastOn = lineFulfillment(line) === 'roast-to-order'
+                  return (
+                    <li key={lineMatchKey(line)}>
+                      <p>{product.name}・{bagLabel(line.size)} × {line.quantity}</p>
+                      <p>{fulfillmentSummary(line)}{roastOn ? `・${roastShipEstimate()}此日期為示意。` : '・依店主確認的方式交付。'}</p>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+            <button className="continue-shopping" type="button" onClick={() => { setCartOpen(false); setViewProductId(null); window.requestAnimationFrame(() => document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' })) }}><Icon name="plus" />繼續選購其他豆款</button>
             <div className="cart-total"><span>商品小計</span><strong>{priceText(total)}</strong></div>
             <form className="order-form" onSubmit={handleSubmitOrder}>
               {receipt && <div className="order-success" role="status"><strong>訂單已送出</strong><p>訂單編號：<span>{receipt.orderId}</span></p><p>商品小計 {priceText(receipt.subtotal)}・運費 {priceText(receipt.shipping)}・合計 {priceText(receipt.total)}</p><p>{shippingContact}</p><p>{receipt.ownerNotified ? '店主已收到電子郵件通知。' : '訂單已記錄，但通知郵件未能寄出，請直接聯絡老邱。'}</p></div>}
