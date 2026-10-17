@@ -18,5 +18,6 @@ describe('stock feed payload', () => {
     expect(stockSyncLabel('stale')).toContain('沿用最近一次成功')
     expect(stockSyncLabel('loading')).toContain('正在讀取')
     expect(stockSyncLabel('error')).toContain('暫時無法讀取')
+    expect(stockSyncLabel('illustrative')).toContain('示意豆單')
   })
 })
