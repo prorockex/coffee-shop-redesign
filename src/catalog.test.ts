@@ -4,7 +4,7 @@ import { filterProducts, getCartTotal, products, canAddMore, type CartLine } fro
 const limitedId = 'colombia-huila-rainforest'
 
 function line(productId: string, size: CartLine['size'], quantity: number): CartLine {
-  return { productId, size, quantity }
+  return { productId, size, quantity, roastLevel: '中焙' }
 }
 
 describe('catalog data and order calculations', () => {

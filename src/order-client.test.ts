@@ -7,7 +7,7 @@ const order: OrderSubmission = {
   deliveryMethod: 'pickup',
   storeInfo: '',
   note: '',
-  items: [{ productId: 'ethiopia-guji-uraga-tipoboka', size: 'half', quantity: 1 }],
+  items: [{ productId: 'ethiopia-guji-uraga-tipoboka', size: 'half', quantity: 1, roastLevel: '深焙' }],
   privacyConsent: true,
   turnstileToken: 'turnstile-token',
   website: '',
@@ -24,6 +24,7 @@ describe('Apps Script-backed order client', () => {
     expect(options.headers).toMatchObject({ 'content-type': 'application/json' })
     const payload = JSON.parse(String(options.body)) as Record<string, unknown>
     expect(payload).toMatchObject({ customerName: order.customerName, phone: order.phone, privacyConsent: true })
+    expect(payload.items).toEqual(order.items)
     expect(payload).not.toHaveProperty('total')
     expect(payload).not.toHaveProperty('bridgeToken')
     expect(result.total).toBe(350)

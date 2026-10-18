@@ -24,6 +24,8 @@ function doPost(e) {
     }
 
     const savedAt = new Date(order.createdAt);
+    // Roast (淺焙/中焙/深焙) is written inside column F, 商品明細, on each item line.
+    // Columns A–M stay in place; roast is not a new column.
     const itemSummary = formatOrderItemsSummary_(order.items);
     sheet.appendRow([
       order.orderId,
@@ -107,8 +109,9 @@ function validateOrderBridgePayload_(payload) {
     if (size !== 'half' && size !== 'one') throw new Error('Invalid size');
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20) throw new Error('Invalid quantity');
     if (!Number.isSafeInteger(unitPrice) || unitPrice < 1 || unitPrice > 1000000) throw new Error('Invalid price');
+    const roastLevel = assertRoastLevel_(item.roastLevel);
     calculatedSubtotal += quantity * unitPrice;
-    return { productId: productId, name: safeOrderCell_(name), size: size, quantity: quantity, unitPrice: unitPrice };
+    return { productId: productId, name: safeOrderCell_(name), size: size, quantity: quantity, unitPrice: unitPrice, roastLevel: roastLevel };
   });
   const expectedShipping = deliveryMethod === 'convenience_store' ? 60 : 0;
   if (subtotal !== calculatedSubtotal || shipping !== expectedShipping || total !== subtotal + shipping) throw new Error('Invalid total');
@@ -154,7 +157,7 @@ function testOrderEmail() {
     phone: '0900000000',
     deliveryMethod: 'pickup',
     storeInfo: '',
-    items: [{ name: '測試咖啡豆', size: 'half', quantity: 1, unitPrice: 1 }],
+    items: [{ name: '測試咖啡豆', size: 'half', quantity: 1, unitPrice: 1, roastLevel: '中焙' }],
     subtotal: 1,
     shipping: 0,
     total: 1,
@@ -163,13 +166,20 @@ function testOrderEmail() {
   console.log('Test email sent to ' + ORDER_NOTIFICATION_EMAIL);
 }
 
+function assertRoastLevel_(value) {
+  const roastLevel = String(value || '');
+  if (roastLevel !== '淺焙' && roastLevel !== '中焙' && roastLevel !== '深焙') throw new Error('Invalid roast');
+  return roastLevel;
+}
+
 function formatOrderItemsSummary_(items) {
   return items.map(function(item) {
     const sizeLabel = item.size === 'half' ? '半磅' : '一磅';
     const quantity = Number(item.quantity);
     const unitPrice = Number(item.unitPrice);
+    const roastLevel = assertRoastLevel_(item.roastLevel);
     const itemTotal = quantity * unitPrice;
-    return '【' + safeOrderCell_(item.name) + '】' + sizeLabel + ' × ' + quantity + '｜單價 NT$' + unitPrice + '｜小計 NT$' + itemTotal;
+    return '【' + safeOrderCell_(item.name) + '】' + sizeLabel + ' × ' + quantity + '｜' + roastLevel + '｜單價 NT$' + unitPrice + '｜小計 NT$' + itemTotal;
   }).join('\n');
 }
 
