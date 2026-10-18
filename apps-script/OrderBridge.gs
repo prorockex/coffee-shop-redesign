@@ -1,5 +1,6 @@
-const ORDER_BRIDGE_SHEET_ID = '1BizaQ0-hODd3sxYiEJ2DFf2pRCZvu8msCi6UMKWHK0U';
-const ORDER_BRIDGE_SHEET_TAB = '網站訂單';
+// 「老邱自家烘焙 gemini」試算表的 Orders 分頁（與舊網站歷史訂單同一張表）。
+const ORDER_BRIDGE_SHEET_ID = '1BxRlCcvVjLYEdhyIt2B7969k2i-kXKfwvviPFhLUi_g';
+const ORDER_BRIDGE_SHEET_TAB = 'Orders';
 const ORDER_BRIDGE_TOKEN_PROPERTY = 'ORDER_BRIDGE_TOKEN';
 const ORDER_NOTIFICATION_EMAIL = 'prorockex@gmail.com';
 
@@ -19,31 +20,14 @@ function doPost(e) {
 
     const sheet = SpreadsheetApp.openById(ORDER_BRIDGE_SHEET_ID).getSheetByName(ORDER_BRIDGE_SHEET_TAB);
     if (!sheet) throw new Error('Orders tab not found');
-    if (sheet.getLastRow() > 1 && sheet.createTextFinder(order.orderId).matchEntireCell(true).findNext()) {
+    // Orders has no header row: row 1 is already an order, so search whenever any row exists.
+    if (sheet.getLastRow() > 0 && sheet.createTextFinder(order.orderId).matchEntireCell(true).findNext()) {
       return orderBridgeJson_({ status: 'success', orderId: order.orderId, duplicate: true });
     }
 
-    const savedAt = new Date(order.createdAt);
-    // Roast (淺焙/中焙/深焙) is written inside column F, 商品明細, on each item line.
-    // Columns A–M stay in place; roast is not a new column.
-    const itemSummary = formatOrderItemsSummary_(order.items);
-    sheet.appendRow([
-      order.orderId,
-      savedAt,
-      safeOrderCell_(order.customerName),
-      "'" + order.phone,
-      order.deliveryMethod,
-      itemSummary,
-      safeOrderCell_(order.storeInfo),
-      safeOrderCell_(order.note),
-      order.subtotal,
-      order.shipping,
-      order.total,
-      '待聯絡',
-      'v1-90days'
-    ]);
+    sheet.appendRow(buildOrderSheetRow_(order));
     const row = sheet.getLastRow();
-    sheet.setRowHeight(row, 72);
+    sheet.getRange(row, 2).setNumberFormat('yyyy/mm/dd h:mm:ss');
     if (String(sheet.getRange(row, 1).getValue()) !== order.orderId) throw new Error('Order row verification failed');
     let notification = 'sent';
     try {
@@ -164,6 +148,39 @@ function testOrderEmail() {
     note: '這是 testOrderEmail 寄出的測試信'
   });
   console.log('Test email sent to ' + ORDER_NOTIFICATION_EMAIL);
+}
+
+/**
+ * One row in the Orders tab, matching the historical rows (8 columns, A–H, no header):
+ * A 訂單編號 | B 下單時間 | C 姓名 | D 電話 | E 取貨方式（自取／超商取貨） | F 品項 | G 總額（含運費） | H 備註／超商門市
+ */
+function buildOrderSheetRow_(order) {
+  return [
+    order.orderId,
+    new Date(order.createdAt),
+    safeOrderCell_(order.customerName),
+    "'" + order.phone,
+    order.deliveryMethod === 'convenience_store' ? '超商取貨' : '自取',
+    formatOrderItemsForSheet_(order.items),
+    order.total,
+    formatOrderSheetNote_(order)
+  ];
+}
+
+/** Items in the historical Orders format: 【品名】 烘焙度 / 規格 x數量, one line per item. */
+function formatOrderItemsForSheet_(items) {
+  return items.map(function(item) {
+    const sizeLabel = item.size === 'half' ? '半磅' : '一磅';
+    return '【' + safeOrderCell_(item.name) + '】 ' + assertRoastLevel_(item.roastLevel) + ' / ' + sizeLabel + ' x' + Number(item.quantity);
+  }).join('\n');
+}
+
+/** Column H: store info for 超商取貨 (as the old site did), plus the customer note. */
+function formatOrderSheetNote_(order) {
+  const parts = [];
+  if (order.storeInfo) parts.push(order.storeInfo);
+  if (order.note) parts.push(order.storeInfo ? '備註：' + order.note : order.note);
+  return safeOrderCell_(parts.join('\n'));
 }
 
 function assertRoastLevel_(value) {

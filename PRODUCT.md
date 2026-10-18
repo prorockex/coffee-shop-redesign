@@ -25,7 +25,7 @@ A direct storefront for 老邱自家烘焙; present the catalogue as a quiet pap
 
 ## Operating Context
 
-Customers browse products, select quantities, provide order details, and submit an order. The owner needs to review orders and update order status. Intended source of order records: the Google Sheet at `1BizaQ0-hODd3sxYiEJ2DFf2pRCZvu8msCi6UMKWHK0U`.
+Customers browse products, select quantities, provide order details, and submit an order. The owner needs to review orders and update order status. Website orders are written to the `Orders` tab of the Google Sheet `1BxRlCcvVjLYEdhyIt2B7969k2i-kXKfwvviPFhLUi_g` (老邱自家烘焙 gemini).
 
 ## Capabilities and Constraints
 
@@ -50,7 +50,7 @@ Customers browse products, select quantities, provide order details, and submit 
 - Existing storefront: `https://sites.google.com/view/rockmanex/首頁`; the browser-rendered page exposed only the title, but the user supplied a 311×1336 mobile screenshot of the product list. It shows six coffee listings with origin/processing labels, roast dropdowns, half-pound options, prices (mostly $350, one $380), add-to-cart buttons, and a cart. Product names/descriptions are too small to transcribe reliably; do not guess exact catalog data.
 - User-provided XLSX copy was inspected with OfficeCLI. Its `Products` sheet exposes 27 product rows (names, origin, bean, process, tasting notes, 0.5 lb and 1 lb prices); the workbook also contains existing customer/order records. Use the catalogue sheet only and keep the original workbook outside the project.
 - Current inventory source: Google Sheet `https://docs.google.com/spreadsheets/d/1BxRlCcvVjLYEdhyIt2B7969k2i-kXKfwvviPFhLUi_g/edit?usp=drivesdk`, titled `老邱自家烘焙`. Read-only API access is verified. Only `Products!A1:B100` was read: 27 product names matched the catalog; 6 non-empty IDs (`p022`–`p027`) and 21 blank IDs. Do not read or expose the `Customers` or `Orders` tabs for storefront stock.
-- The earlier spreadsheet ID `1BizaQ0-hODd3sxYiEJ2DFf2pRCZvu8msCi6UMKWHK0U` remains the intended order destination in the brief; it has not been confirmed or written to as part of this inventory task.
+- The earlier spreadsheet ID `1BizaQ0-hODd3sxYiEJ2DFf2pRCZvu8msCi6UMKWHK0U` is no longer the order destination; orders go to the 老邱自家烘焙 gemini `Orders` tab.
 - The screenshot is real reference evidence for page structure and visible price ranges, not a reliable source for exact product copy.
 - No verified product image assets, customer testimonials, or sales proof are available.
 
