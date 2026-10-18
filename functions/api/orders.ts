@@ -1,4 +1,4 @@
-import { priceFor, type BagSize, type CartLine } from '../../src/catalog'
+import { isRoastLevel, priceFor, type BagSize, type CartLine, type RoastLevel } from '../../src/catalog'
 import { isValidPhone, normalizePhone } from '../../src/phone'
 import { productsFromSheetRows, SHEET_RANGE_COLUMNS } from '../../src/sheet-products'
 
@@ -82,7 +82,8 @@ export function parseOrder(value: unknown): { order: ParsedOrder } | { error: st
   for (const entry of data.items) {
     const line = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
     if (typeof line.productId !== 'string' || (line.size !== 'half' && line.size !== 'one') || !Number.isInteger(line.quantity) || Number(line.quantity) < 1 || Number(line.quantity) > 20) return { error: '選豆單中的商品資料有誤，請清空後重新加入。' }
-    items.push({ productId: line.productId, size: line.size as BagSize, quantity: Number(line.quantity) })
+    if (!isRoastLevel(line.roastLevel)) return { error: '請為每項商品選擇烘焙度（淺焙、中焙或深焙）。' }
+    items.push({ productId: line.productId, size: line.size as BagSize, quantity: Number(line.quantity), roastLevel: line.roastLevel })
   }
   if (data.privacyConsent !== true) return { error: '請勾選個資使用同意。' }
   if (!turnstileToken || turnstileToken.length > 4096) return { error: '請先完成防自動送單驗證。' }
@@ -132,13 +133,13 @@ export async function onRequestPost({ request, env }: PagesContext): Promise<Res
     const sheet = await stockResponse.json() as { values?: unknown }
     const listedProducts = productsFromSheetRows(sheet.values)
     let subtotal = 0
-    const itemDetails: Array<{ productId: string; name: string; size: BagSize; quantity: number; unitPrice: number }> = []
+    const itemDetails: Array<{ productId: string; name: string; size: BagSize; quantity: number; unitPrice: number; roastLevel: RoastLevel }> = []
     for (const line of order.items) {
       const product = listedProducts.find((item) => item.id === line.productId)
       if (!product || product.inventoryStatus !== 'listed') return json({ error: '你選擇的商品已售完，請重新確認選購清單。' }, 409)
       const unitPrice = priceFor(product, line.size)
       subtotal += unitPrice * line.quantity
-      itemDetails.push({ productId: await bridgeProductId(product.id), name: product.name, size: line.size, quantity: line.quantity, unitPrice })
+      itemDetails.push({ productId: await bridgeProductId(product.id), name: product.name, size: line.size, quantity: line.quantity, unitPrice, roastLevel: line.roastLevel })
     }
     const shipping = order.deliveryMethod === 'convenience_store' ? SHIPPING_FEE : 0
     const orderId = `QC-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`

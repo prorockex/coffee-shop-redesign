@@ -23,7 +23,7 @@ When Tailscale is connected, start the dev server on this Mac’s Tailscale inte
 
 - Show the 6 products whose `Products` column I (上架 checkbox) is checked; unchecked/blank rows are hidden (snapshot fallback reflects the last read). All 27 sheet names matched the catalog.
 - Search visible products by product, origin, processing method, or tasting notes.
-- Filter by processing method; choose half-pound/one-pound pricing and build a cart.
+- Filter by processing method; choose half-pound/one-pound pricing, a required roast (淺焙 / 中焙 / 深焙) on every bean, and build a cart. The same bean at a different roast is a separate cart line.
 - Inspect calculated subtotals and change quantities.
 - Open `/admin` to filter three explicitly fictional orders and change their status for the current page session.
 
@@ -53,3 +53,38 @@ The homepage cover picks one of nine shop photographs in `public/covers/` at ran
 ## Listing rule (2026-10-16)
 
 The storefront list comes only from the `Products` sheet: every row whose column I (`上架` checkbox) is TRUE is shown, using B 名稱, C 產區, D 豆種, E 處理法, F 風味描述, G 半磅價格, H 一磅價格 from that row. Column A (ID) is not used. A new bean = new sheet row + tick, no code change. Missing fields are filled from the static catalog in `src/catalog.ts` by normalized name when possible; rows without a name or prices are skipped. `/api/stock` returns `{ products, checkedAt }`; `/api/orders` re-reads the sheet and prices items from it. If the feed fails before any success the page shows an error state (no static fallback, to avoid selling unlisted beans); after a success it keeps the last list.
+
+## Roast level on every order
+
+Every listed bean asks for a roast before it can be added: `淺焙`, `中焙`, or `深焙`. The same bean with a different roast is a separate cart line, and the roast can be changed in the cart. `/api/orders` requires `roastLevel` on each item and rejects a missing or any other value. The Pages Function forwards that value to the Apps Script bridge.
+
+### 網站訂單 column layout
+
+Roast is written **inside the existing column F (商品明細)** on each item line. Columns A–M are unchanged, and no new column is appended:
+
+| Column | Contents |
+| --- | --- |
+| A | 訂單編號 |
+| B | 下單時間 |
+| C | 顧客姓名 |
+| D | 電話 |
+| E | 配送方式 |
+| F | 商品明細, now including 烘焙度 on every line |
+| G | 超商門市 |
+| H | 備註 |
+| I | 小計 |
+| J | 運費 |
+| K | 總額 |
+| L | 狀態（待聯絡） |
+| M | 保存政策 |
+
+One item line looks like: `【衣索比亞 古吉】半磅 × 2｜淺焙｜單價 NT$350｜小計 NT$700`. The owner notification email (MailApp) uses the same lines, so each item includes its roast.
+
+### Redeploy OrderBridge.gs
+
+`apps-script/OrderBridge.gs` changed. Roast will not appear in the sheet or the owner email until the script in the Apps Script editor is replaced and the **existing** web app deployment is updated (same URL):
+
+1. Open the Apps Script project and replace the whole `OrderBridge.gs` contents with the file from this repo.
+2. Deploy → Manage deployments → edit the current deployment → Version: New version → Deploy.
+
+Do not create a new deployment; that would change the URL stored in `APPS_SCRIPT_URL`.

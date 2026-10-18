@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { bridgeProductId, onRequestPost, type Env } from './orders'
+import { bridgeProductId, onRequestPost, parseOrder, type Env } from './orders'
 
 let privateKeyPem = ''
 beforeAll(async () => {
@@ -32,7 +32,7 @@ const validOrder = {
   deliveryMethod: 'convenience_store',
   storeInfo: '7-ELEVEN 測試門市 123456',
   note: '請先電話聯絡',
-  items: [{ productId: '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', size: 'half', quantity: 2 }],
+  items: [{ productId: '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', size: 'half', quantity: 2, roastLevel: '淺焙' }],
   privacyConsent: true,
   turnstileToken: 'valid-challenge',
   website: '',
@@ -41,6 +41,24 @@ const validOrder = {
 beforeEach(() => vi.unstubAllGlobals())
 
 describe('public order endpoint', () => {
+  it('requires one of 淺焙, 中焙, or 深焙 on every item and does not call providers otherwise', () => {
+    const fakeFetch = vi.fn()
+    vi.stubGlobal('fetch', fakeFetch)
+    const missing = parseOrder({ ...validOrder, items: [{ productId: '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', size: 'half', quantity: 2 }] })
+    const invalid = parseOrder({ ...validOrder, items: [{ productId: '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', size: 'half', quantity: 1, roastLevel: 'light' }] })
+    const kept = parseOrder({
+      ...validOrder,
+      items: [
+        { productId: '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', size: 'half', quantity: 1, roastLevel: '淺焙' },
+        { productId: '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', size: 'one', quantity: 1, roastLevel: '深焙' },
+      ],
+    })
+    expect('error' in missing && missing.error).toContain('烘焙度')
+    expect('error' in invalid && invalid.error).toContain('烘焙度')
+    expect('order' in kept && kept.order.items.map((item) => item.roastLevel)).toEqual(['淺焙', '深焙'])
+    expect(fakeFetch).not.toHaveBeenCalled()
+  })
+
   it('rejects orders when privacy consent is missing without contacting providers', async () => {
     const fakeFetch = vi.fn()
     vi.stubGlobal('fetch', fakeFetch)
@@ -142,7 +160,7 @@ describe('public order endpoint', () => {
     expect(body.orderId).toBe(result.orderId)
     expect(body.customerName).toBe(validOrder.customerName)
     expect(body.note).toBe(validOrder.note)
-    expect(body.items).toEqual([{ productId: await bridgeProductId('衣索比亞 古吉 烏拉嘎 提波波卡處理廠'), name: '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', size: 'half', quantity: 2, unitPrice: 350 }])
+    expect(body.items).toEqual([{ productId: await bridgeProductId('衣索比亞 古吉 烏拉嘎 提波波卡處理廠'), name: '衣索比亞 古吉 烏拉嘎 提波波卡處理廠', size: 'half', quantity: 2, unitPrice: 350, roastLevel: '淺焙' }])
     expect(body.total).toBe(760)
     expect(JSON.stringify(result)).not.toContain(validOrder.phone)
   })

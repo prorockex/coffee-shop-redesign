@@ -3,7 +3,7 @@ import { runInNewContext } from 'node:vm'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { bridgeProductId, onRequestPost, parseOrder, type Env } from './orders'
 
-type Validator = (payload: unknown) => { items: Array<{ productId: string; name: string }> }
+type Validator = (payload: unknown) => { items: Array<{ productId: string; name: string; roastLevel: string }> }
 const gsSource = readFileSync(new URL('../../apps-script/OrderBridge.gs', import.meta.url), 'utf8')
 const stub = new Proxy({}, { get: () => stub })
 const sandbox: Record<string, unknown> = { SpreadsheetApp: stub, PropertiesService: stub, ContentService: stub, MailApp: stub, LockService: stub, Utilities: stub, Logger: stub, console }
@@ -47,7 +47,7 @@ describe('Apps Script bridge payload compatibility', () => {
           method: 'POST', headers: { origin: env.STOREFRONT_ORIGIN!, 'content-type': 'application/json' },
           body: JSON.stringify({
             customerName: '邱 測試', phone: '０９１２－３４５　６７８', deliveryMethod, storeInfo: deliveryMethod === 'pickup' ? '' : '7-ELEVEN 測試門市 123456', note: '第一行\n第二行',
-            items: [{ productId: names[0], size: 'half', quantity: 2 }, { productId: names[1], size: 'one', quantity: 1 }, { productId: names[3], size: 'half', quantity: 1 }],
+            items: [{ productId: names[0], size: 'half', quantity: 2, roastLevel: '淺焙' }, { productId: names[1], size: 'one', quantity: 1, roastLevel: '中焙' }, { productId: names[3], size: 'half', quantity: 1, roastLevel: '深焙' }],
             privacyConsent: true, turnstileToken: 'ok', website: '',
           }),
         }), env,
@@ -57,20 +57,31 @@ describe('Apps Script bridge payload compatibility', () => {
       expect((payload as { phone: string }).phone).toBe('0912345678')
       const clean = validate(payload)
       expect(clean.items.map((item) => item.name)).toEqual([names[0], names[1], names[3]])
+      expect(clean.items.map((item) => item.roastLevel)).toEqual(['淺焙', '中焙', '深焙'])
       for (const item of clean.items) expect(item.productId).toMatch(/^[a-z0-9-]{1,80}$/)
     })
   }
 
   it('the real validator still rejects a raw Chinese product id (the production bug)', () => {
-    expect(() => validate({ orderId: 'QC-20261016-ABCDEF12', customerName: 'a', phone: '0912345678', deliveryMethod: 'pickup', storeInfo: '', note: '', privacyConsent: true, retentionPolicy: 'v1-90days', createdAt: new Date().toISOString(), items: [{ productId: names[0], name: names[0], size: 'half', quantity: 1, unitPrice: 350 }], subtotal: 350, shipping: 0, total: 350 })).toThrow('Invalid product')
+    expect(() => validate({ orderId: 'QC-20261016-ABCDEF12', customerName: 'a', phone: '0912345678', deliveryMethod: 'pickup', storeInfo: '', note: '', privacyConsent: true, retentionPolicy: 'v1-90days', createdAt: new Date().toISOString(), items: [{ productId: names[0], name: names[0], size: 'half', quantity: 1, unitPrice: 350, roastLevel: '中焙' }], subtotal: 350, shipping: 0, total: 350 })).toThrow('Invalid product')
+  })
+
+  it('the real validator rejects a missing or unknown roast', () => {
+    const base = { orderId: 'QC-20261016-ABCDEF12', customerName: 'a', phone: '0912345678', deliveryMethod: 'pickup', storeInfo: '', note: '', privacyConsent: true, retentionPolicy: 'v1-90days', createdAt: new Date().toISOString(), subtotal: 350, shipping: 0, total: 350 }
+    const item = { productId: 'p-0123456789abcdef', name: '肯亞 AA', size: 'half', quantity: 1, unitPrice: 350 }
+    expect(() => validate({ ...base, items: [item] })).toThrow('Invalid roast')
+    expect(() => validate({ ...base, items: [{ ...item, roastLevel: 'light' }] })).toThrow('Invalid roast')
+    expect(validate({ ...base, items: [{ ...item, roastLevel: '淺焙' }] }).items[0].roastLevel).toBe('淺焙')
   })
 
   it('returns a specific message per failing field', () => {
-    const base = { customerName: '邱', phone: '0912345678', deliveryMethod: 'pickup', storeInfo: '', note: '', items: [{ productId: 'x', size: 'half', quantity: 1 }], privacyConsent: true, turnstileToken: 't', website: '' }
+    const base = { customerName: '邱', phone: '0912345678', deliveryMethod: 'pickup', storeInfo: '', note: '', items: [{ productId: 'x', size: 'half', quantity: 1, roastLevel: '中焙' }], privacyConsent: true, turnstileToken: 't', website: '' }
     const err = (patch: Record<string, unknown>) => { const r = parseOrder({ ...base, ...patch }); return 'error' in r ? r.error : '' }
     expect(err({ customerName: '' })).toContain('姓名')
     expect(err({ phone: '123' })).toContain('電話')
-    expect(err({ items: [{ productId: 'x', size: 'half', quantity: 1.5 }] })).toContain('商品')
+    expect(err({ items: [{ productId: 'x', size: 'half', quantity: 1.5, roastLevel: '中焙' }] })).toContain('商品')
+    expect(err({ items: [{ productId: 'x', size: 'half', quantity: 1 }] })).toContain('烘焙度')
+    expect(err({ items: [{ productId: 'x', size: 'half', quantity: 1, roastLevel: '極深焙' }] })).toContain('烘焙度')
     expect(err({ privacyConsent: false })).toContain('個資')
     expect(err({ deliveryMethod: 'convenience_store' })).toContain('超商門市')
     expect(err({})).toBe('')

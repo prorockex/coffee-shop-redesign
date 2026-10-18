@@ -1,6 +1,13 @@
 export type BagSize = 'half' | 'one'
 export type InventoryStatus = 'listed' | 'review'
 
+export const ROAST_LEVELS = ['淺焙', '中焙', '深焙'] as const
+export type RoastLevel = (typeof ROAST_LEVELS)[number]
+
+export function isRoastLevel(value: unknown): value is RoastLevel {
+  return ROAST_LEVELS.some((level) => level === value)
+}
+
 export type Product = {
   id: string
   name: string
@@ -13,7 +20,7 @@ export type Product = {
   inventoryStatus: InventoryStatus
 }
 
-export type CartLine = { productId: string; size: BagSize; quantity: number }
+export type CartLine = { productId: string; size: BagSize; quantity: number; roastLevel: RoastLevel }
 
 export const products: Product[] = [
   { id: 'ethiopia-angel-geisha', name: '衣索比亞 天使藝妓', origin: '衣索比亞', bean: '藝妓', process: '水洗', flavor: '杏桃、白花、蘋果、紅莓、甜橙', priceHalf: 350, priceOne: 690, inventoryStatus: 'listed' },

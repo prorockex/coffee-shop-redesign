@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { canAddMore, filterProducts, getCartTotal, priceFor, type BagSize, type CartLine, type Product } from './catalog'
+import { canAddMore, filterProducts, getCartTotal, isRoastLevel, priceFor, ROAST_LEVELS, type BagSize, type CartLine, type Product, type RoastLevel } from './catalog'
+import { changeLineQuantity, lineMatchKey, retargetCartLine, upsertCartLine } from './roast'
 import { parseStockFeed, stockSyncLabel, type StockSyncState } from './stock-feed'
 import { submitOrder, type OrderReceipt } from './order-client'
 import { OrderCaptcha } from './OrderCaptcha'
@@ -93,10 +94,30 @@ function Icon({ name }: { name: 'bag' | 'search' | 'arrow' | 'plus' | 'minus' | 
   return <svg {...common}><path d="m6 6 12 12M18 6 6 18" /></svg>
 }
 
+function RoastSelector({ name, value, onChange, disabled = false, compact = false }: {
+  name: string
+  value: RoastLevel | null
+  onChange: (level: RoastLevel) => void
+  disabled?: boolean
+  compact?: boolean
+}) {
+  return (
+    <fieldset className={compact ? 'roast-choice is-compact' : 'roast-choice'} disabled={disabled} aria-required="true">
+      <legend>烘焙度</legend>
+      <div className="roast-options" role="group" aria-label={`${name}的烘焙度`}>
+        {ROAST_LEVELS.map((level) => (
+          <button key={level} type="button" aria-pressed={value === level} onClick={() => onChange(level)}>{level}</button>
+        ))}
+      </div>
+    </fieldset>
+  )
+}
+
 function Storefront() {
   const [query, setQuery] = useState('')
   const [processFilter, setProcessFilter] = useState('全部')
   const [sizes, setSizes] = useState<Record<string, BagSize>>({})
+  const [roasts, setRoasts] = useState<Record<string, RoastLevel>>({})
   const [cart, setCart] = useState<CartLine[]>([])
   const [cartOpen, setCartOpen] = useState(false)
   const [notice, setNotice] = useState('')
@@ -142,25 +163,26 @@ function Storefront() {
     setReceipt(null)
     setShippingContact('')
     const size = sizes[product.id] ?? 'half'
+    const roastLevel = roasts[product.id]
+    if (!isRoastLevel(roastLevel)) {
+      setNotice('請先選擇烘焙度。')
+      return
+    }
     if (!canAddMore(cart, product, size, 1)) {
       setNotice('這款目前暫不開放加入選豆單。')
       return
     }
-    setCart((current) => {
-      const found = current.find((line) => line.productId === product.id && line.size === size)
-      if (found) return current.map((line) => line === found ? { ...line, quantity: line.quantity + 1 } : line)
-      return [...current, { productId: product.id, size, quantity: 1 }]
-    })
-    setNotice(`已將「${product.name}」加入選豆單。`)
+    setCart((current) => upsertCartLine(current, { productId: product.id, size, quantity: 1, roastLevel }))
+    setNotice(`已將「${product.name}」（${roastLevel}）加入選豆單。`)
     setCartOpen(false)
   }
 
   function changeQuantity(line: CartLine, delta: number) {
-    setCart((current) => current.flatMap((item) => {
-      if (item.productId !== line.productId || item.size !== line.size) return [item]
-      const quantity = item.quantity + delta
-      return quantity > 0 ? [{ ...item, quantity }] : []
-    }))
+    setCart((current) => changeLineQuantity(current, line, delta))
+  }
+
+  function setLineRoast(line: CartLine, roastLevel: RoastLevel) {
+    setCart((current) => retargetCartLine(current, line, roastLevel))
   }
 
   async function handleSubmitOrder(event: FormEvent<HTMLFormElement>) {
@@ -182,6 +204,10 @@ function Storefront() {
     if (items.length !== cart.length) setCart(items)
     if (items.length === 0) {
       setFormError('選豆單中的商品已下架，請重新選購。')
+      return
+    }
+    if (items.some((line) => !isRoastLevel(line.roastLevel))) {
+      setFormError('請為每項商品選擇烘焙度（淺焙、中焙或深焙）。')
       return
     }
     setSubmitting(true)
@@ -254,7 +280,7 @@ function Storefront() {
             <div>
               <h2 id="catalog-title">本期豆單</h2>
               <p className="small-overline">COFFEE INDEX · 老邱自家烘焙</p>
-              <p className="catalog-intro">只列出商品表中勾選「上架」的品項；風味與價格依商品表整理。</p>
+              <p className="catalog-intro">只列出商品表中勾選「上架」的品項；風味與價格依商品表整理。每款下單前請選擇烘焙度。</p>
             </div>
             <p className="result-count" aria-live="polite">找到 <strong>{filtered.length}</strong> 款</p>
           </div>
@@ -277,7 +303,9 @@ function Storefront() {
             <ul className="product-list">
               {filtered.map((product, index) => {
                 const selectedSize = sizes[product.id] ?? 'half'
+                const selectedRoast = roasts[product.id] ?? null
                 const needsReview = product.inventoryStatus === 'review'
+                const needsRoast = !needsReview && !isRoastLevel(selectedRoast)
                 return (
                   <li key={product.id}>
                     <article className="product-entry">
@@ -298,8 +326,14 @@ function Storefront() {
                             <span>一磅</span><strong>{priceText(product.priceOne)}</strong>
                           </button>
                         </fieldset>
-                        <button className="add-button" type="button" disabled={needsReview} onClick={() => addProduct(product)}>
-                          {needsReview ? '庫存待確認' : <><Icon name="plus" />加入選豆單</>}
+                        <RoastSelector
+                          name={product.name}
+                          value={selectedRoast}
+                          disabled={needsReview}
+                          onChange={(level) => setRoasts((current) => ({ ...current, [product.id]: level }))}
+                        />
+                        <button className="add-button" type="button" disabled={needsReview || needsRoast} onClick={() => addProduct(product)}>
+                          {needsReview ? '庫存待確認' : needsRoast ? '請先選擇烘焙度' : <><Icon name="plus" />加入選豆單</>}
                         </button>
                       </div>
                     </article>
@@ -325,14 +359,33 @@ function Storefront() {
               {cart.map((line) => {
                 const product = availableProducts.find((item) => item.id === line.productId)
                 if (!product) return null
-                return <li key={`${line.productId}-${line.size}`} className="cart-line">
-                  <div><h3>{product.name}</h3><p>{bagLabel(line.size)}・{priceText(priceFor(product, line.size))}／袋</p></div>
-                  <div className="quantity-control" aria-label={`${product.name}數量`}>
-                    <button type="button" onClick={() => changeQuantity(line, -1)} aria-label={`減少${product.name}`}><Icon name="minus" /></button><span>{line.quantity}</span><button type="button" onClick={() => changeQuantity(line, 1)} aria-label={`增加${product.name}`}><Icon name="plus" /></button>
+                return <li key={lineMatchKey(line)} className="cart-line">
+                  <div className="cart-line-copy">
+                    <h3>{product.name}</h3>
+                    <p>{bagLabel(line.size)}・{priceText(priceFor(product, line.size))}／袋・{line.roastLevel}</p>
+                    <RoastSelector name={product.name} value={line.roastLevel} onChange={(level) => setLineRoast(line, level)} compact />
+                  </div>
+                  <div className="quantity-control" aria-label={`${product.name}${line.roastLevel}數量`}>
+                    <button type="button" onClick={() => changeQuantity(line, -1)} aria-label={`減少${product.name}${line.roastLevel}`}><Icon name="minus" /></button><span>{line.quantity}</span><button type="button" onClick={() => changeQuantity(line, 1)} aria-label={`增加${product.name}${line.roastLevel}`}><Icon name="plus" /></button>
                   </div>
                 </li>
               })}
             </ul>
+            <section className="order-summary" aria-label="訂單摘要">
+              <h3>訂單摘要</h3>
+              <ul>
+                {cart.map((line) => {
+                  const product = availableProducts.find((item) => item.id === line.productId)
+                  if (!product) return null
+                  return (
+                    <li key={lineMatchKey(line)}>
+                      <p>{product.name}・{bagLabel(line.size)} × {line.quantity}</p>
+                      <p>烘焙度 {line.roastLevel}</p>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
             <button className="continue-shopping" type="button" onClick={() => { setCartOpen(false); document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' }) }}><Icon name="plus" />繼續選購其他豆款</button>
             <div className="cart-total"><span>商品小計</span><strong>{priceText(total)}</strong></div>
             <form className="order-form" onSubmit={handleSubmitOrder}>

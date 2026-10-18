@@ -1,4 +1,4 @@
-import type { BagSize } from './catalog'
+import type { BagSize, RoastLevel } from './catalog'
 
 export type OrderSubmission = {
   customerName: string
@@ -6,7 +6,7 @@ export type OrderSubmission = {
   deliveryMethod: 'pickup' | 'convenience_store'
   storeInfo: string
   note: string
-  items: Array<{ productId: string; size: BagSize; quantity: number }>
+  items: Array<{ productId: string; size: BagSize; quantity: number; roastLevel: RoastLevel }>
   privacyConsent: true
   turnstileToken: string
   website: string

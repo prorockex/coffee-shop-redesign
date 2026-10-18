@@ -208,7 +208,7 @@
 .filter-chip.selected { box-shadow: inset 0 -2px 0 var(--accent); }
 .product-list, .cart-lines, .order-list { margin: 0; padding: 0; list-style: none; }
 .product-list > li { border-bottom: 1px solid var(--rule); }
-.product-entry { display: grid; grid-template-columns: 52px minmax(0, 1fr) minmax(230px, 300px); gap: 22px; align-items: center; padding: 27px 0 29px; }
+.product-entry { display: grid; grid-template-columns: 52px minmax(0, 1fr) minmax(248px, 312px); gap: 22px; align-items: start; padding: 27px 0 29px; }
 .entry-index { align-self: stretch; display: flex; align-items: flex-start; gap: 13px; color: var(--accent); font-size: 14px; font-variant-numeric: tabular-nums; }
 .entry-index i { width: 1px; height: 100%; background: var(--rule); }
 .entry-copy { min-width: 0; }
@@ -217,7 +217,35 @@
 .entry-copy h3 { margin: 8px 0; color: var(--ink); font-family: var(--body-font); font-size: clamp(19px, 1.8vw, 23px); line-height: 1.45; font-weight: 620; text-wrap: pretty; }
 .flavor-note { max-width: 68ch; margin: 0; color: #4d585b; line-height: 1.8; font-size: 14px; }
 .inventory-note { margin: 10px 0 0; color: var(--clay); font-size: 13px; }
-.entry-order { display: grid; gap: 11px; }
+.entry-order {
+  display: grid;
+  gap: 11px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "size" "roast" "add";
+}
+.entry-order > .size-choice { grid-area: size; }
+.entry-order > .roast-choice { grid-area: roast; }
+.entry-order > .add-button { grid-area: add; }
+.roast-choice { margin: 0; padding: 0; border: 0; min-inline-size: 0; display: grid; gap: 6px; }
+.roast-choice legend { padding: 0; color: var(--muted); font-size: 12px; letter-spacing: .02em; }
+.roast-options { display: grid; grid-template-columns: 1fr 1fr 1fr; border: 1px solid #c9cdc7; border-radius: 6px; overflow: hidden; }
+.roast-options button {
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.roast-options button + button { border-left: 1px solid var(--rule); }
+.roast-options button[aria-pressed='true'] { color: var(--ink); background: var(--accent-soft); box-shadow: inset 0 -2px 0 var(--accent); }
+.roast-options button:hover { background: var(--paper-raised); }
+.roast-options button[aria-pressed='true']:hover { background: var(--accent-soft); }
+.roast-choice:disabled { opacity: .56; }
+.roast-choice:disabled button { cursor: not-allowed; }
+.roast-choice.is-compact { gap: 4px; }
+.roast-choice.is-compact .roast-options button { min-height: 36px; font-size: 13px; }
 .size-choice { display: grid; grid-template-columns: 1fr 1fr; min-width: 0; margin: 0; padding: 0; border: 1px solid #c9cdc7; border-radius: 6px; overflow: hidden; }
 .size-choice legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
 .size-choice button {
@@ -292,9 +320,16 @@
 .cart-empty p { color: var(--muted); font-size: 14px; }
 .cart-empty a { display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; color: var(--accent); text-underline-offset: 4px; }
 .cart-lines { padding: 0; }
-.cart-line { padding: 15px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--rule); }
-.cart-line h3 { margin: 0 0 5px; font: 600 15px/1.45 var(--body-font); }
+.cart-line { padding: 15px 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--rule); }
+.cart-line-copy { min-width: 0; flex: 1; display: grid; gap: 8px; }
+.cart-line h3 { margin: 0; font: 600 15px/1.45 var(--body-font); }
 .cart-line p { margin: 0; color: var(--muted); font-size: 13px; }
+.order-summary { margin-top: 14px; padding: 14px; background: var(--paper-raised); border-radius: 7px; }
+.order-summary h3 { margin: 0 0 8px; color: var(--ink); font: 620 15px/1.4 var(--body-font); }
+.order-summary ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.order-summary li { display: grid; gap: 2px; }
+.order-summary p { margin: 0; color: #4d585b; font-size: 13px; line-height: 1.6; }
+.order-summary li p:first-child { color: var(--ink); font-weight: 600; }
 .quantity-control { display: inline-flex; align-items: center; border: 1px solid var(--rule); border-radius: 5px; flex: 0 0 auto; overflow: hidden; }
 .quantity-control button { width: 36px; height: 36px; display: grid; place-items: center; background: transparent; border: 0; color: var(--ink); cursor: pointer; }
 .quantity-control button:hover { background: var(--paper-raised); }
@@ -382,7 +417,7 @@ html { scrollbar-color: #aab8af #efeee9; scrollbar-width: thin; }
     background: linear-gradient(180deg, color-mix(in srgb, var(--ink) 12%, transparent) 0%, color-mix(in srgb, var(--ink) 28%, transparent) 30%, color-mix(in srgb, var(--ink) 78%, transparent) 58%, color-mix(in srgb, var(--ink) 90%, transparent) 100%);
   }
   .product-entry { grid-template-columns: 44px minmax(0, 1fr); gap: 14px; }
-  .entry-order { grid-column: 2; grid-template-columns: minmax(0, 1fr) minmax(150px, .6fr); align-items: center; }
+  .entry-order { grid-column: 2; grid-template-columns: minmax(0, 1fr); grid-template-areas: "size" "roast" "add"; align-items: stretch; }
   .order-entry { grid-template-columns: 120px minmax(0, 1fr) 110px; }
   .status-select-label { grid-column: 2; }
   .status-ink { grid-column: 3; grid-row: 2; }
@@ -422,7 +457,8 @@ html { scrollbar-color: #aab8af #efeee9; scrollbar-width: thin; }
   .product-tags span + span::before { padding-inline: 5px; }
   .entry-copy h3 { font-size: 18px; margin-top: 7px; }
   .flavor-note { font-size: 13px; line-height: 1.75; }
-  .entry-order { grid-column: 2; grid-template-columns: minmax(0, 1.1fr) minmax(120px, .9fr); gap: 8px; }
+  .entry-order { grid-column: 2; grid-template-columns: minmax(0, 1fr); grid-template-areas: "size" "roast" "add"; gap: 8px; }
+  .roast-options button { min-height: 48px; }
   .size-choice button { min-height: 52px; font-size: 11px; }
   .size-choice button strong { font-size: 14px; }
   .add-button { min-height: 52px; font-size: 12px; }
