@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { canAddMore, filterProducts, getCartTotal, priceFor, type BagSize, type CartLine, type Product } from './catalog'
 import { parseStockFeed, stockSyncLabel, type StockSyncState } from './stock-feed'
 import { submitOrder, type OrderReceipt } from './order-client'
@@ -8,6 +8,22 @@ import './App.css'
 
 const priceText = (amount: number) => `$${amount.toLocaleString('zh-TW')}`
 const bagLabel = (size: BagSize) => size === 'half' ? '半磅' : '一磅'
+
+const HOME_COVERS = [
+  { src: '/covers/cover-01.webp', alt: '清晨窗邊的手沖咖啡，玻璃壺盛著琥珀色咖啡，旁邊攤著一本打開的書' },
+  { src: '/covers/cover-02.webp', alt: '晨光落在木桌上的手沖壺、淺焙咖啡豆、玻璃杯與翻開的書' },
+  { src: '/covers/cover-03.webp', alt: '窗邊晨光中的手沖桌，玻璃壺、拉花拿鐵、淺焙豆與打開的書' },
+  { src: '/covers/cover-04.webp', alt: '木質桌面上的手沖咖啡與拉花拿鐵，旁邊是淺焙豆、玻璃壺和翻開的書' },
+  { src: '/covers/cover-05.webp', alt: '從上方看向木桌，淺焙咖啡豆、手沖壺、玻璃咖啡杯與翻開的書' },
+  { src: '/covers/cover-07.webp', alt: '窗光灑在木桌上，拉花拿鐵、淺焙豆、手沖壺與翻開的書' },
+  { src: '/covers/cover-08.webp', alt: '俯瞰的咖啡桌面，淺焙豆、手沖壺、拉花拿鐵與一本打開的書' },
+  { src: '/covers/cover-09.webp', alt: '清晨窗邊的手沖場景，玻璃壺、淺焙豆、拉花咖啡與翻開的書' },
+  { src: '/covers/cover-10.webp', alt: '俯瞰木桌一角，玻璃手沖壺、淺焙豆、拉花拿鐵與翻開的書' },
+] as const
+
+function pickHomeCover() {
+  return HOME_COVERS[Math.floor(Math.random() * HOME_COVERS.length)]
+}
 
 function useStockFeed(onProducts?: (items: readonly Product[]) => void) {
   const [liveProducts, setLiveProducts] = useState<Product[]>([])
@@ -113,6 +129,14 @@ function Storefront() {
   const shipping = deliveryMethod === 'convenience_store' ? 60 : 0
   const grandTotal = total + shipping
   const handleTurnstileToken = useCallback((token: string) => setTurnstileToken(token), [])
+  const [cover] = useState(pickHomeCover)
+  const coverImageRef = useRef<HTMLImageElement>(null)
+  const [coverShown, setCoverShown] = useState(false)
+
+  useEffect(() => {
+    const image = coverImageRef.current
+    if (image?.complete && image.naturalWidth > 0) setCoverShown(true)
+  }, [cover.src])
 
   function addProduct(product: Product) {
     setReceipt(null)
@@ -199,13 +223,24 @@ function Storefront() {
       <ShopHeader cartCount={cartCount} onCart={() => setCartOpen((open) => !open)} cartOpen={cartOpen} />
       <main>
         <section className="hero-edition" aria-labelledby="hero-title">
+          <img
+            ref={coverImageRef}
+            className={coverShown ? 'hero-plate is-shown' : 'hero-plate'}
+            src={cover.src}
+            alt={cover.alt}
+            width={1280}
+            height={720}
+            fetchPriority="high"
+            decoding="async"
+            onLoad={() => setCoverShown(true)}
+          />
+          <div className="hero-scrim" aria-hidden="true" />
           <div className="hero-copy">
             <h1 id="hero-title">今天，想喝哪一支咖啡？</h1>
             <p className="hero-description">從產地、處理法與風味，慢慢挑一支合心意的咖啡豆。</p>
             <a className="primary-link" href="#catalog"><Icon name="arrow" /><span>瀏覽現貨豆款</span></a>
             <p className="edition-note">半磅與一磅規格・價格清楚列明</p>
           </div>
-          <figure className="hero-artwork"><img className="hero-plate" src="/hero-paper-sculpture.png" alt="以紙雕呈現的咖啡枝葉、成熟咖啡果與烘焙咖啡豆" /></figure>
         </section>
 
         <div className="notice-ribbon" role="note">

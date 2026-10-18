@@ -47,7 +47,7 @@ Availability is determined by the `Products` sheet's column I (上架 checkbox):
 
 ## Typography and artwork
 
-The hero uses an original generated paper-sculpture coffee illustration at `public/hero-paper-sculpture.png`; its exact generation prompt is embedded in the PNG metadata. The interface uses the system sans-serif stack and requires no remote fonts.
+The homepage cover picks one of nine shop photographs in `public/covers/` at random on each page load (`cover-06` was not supplied). Sources are 1280×720 and shipped as WebP. The earlier paper-sculpture illustration remains at `public/hero-paper-sculpture.png`. The interface uses the system sans-serif stack and requires no remote fonts.
 
 
 ## Listing rule (2026-10-16)
