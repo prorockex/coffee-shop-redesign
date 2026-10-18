@@ -37,7 +37,7 @@ This is a local preview. Checkout is intentionally disabled; the app sends and s
 
 To activate it, deploy the project as Cloudflare Pages with Functions enabled, create a dedicated Google Cloud service account with the Sheets API enabled, and share only the inventory spreadsheet with that account as Viewer. Configure these Cloudflare variables/secrets: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` (secret), `STOCK_SHEET_ID`, and optional `STOCK_SHEET_TAB` (defaults to `Products`). Keep private-key material in Cloudflare secrets or an ignored local `.dev.vars` file—never in source control or chat. The current Tailscale/Vite preview does not run Pages Functions, so it continues to display the fallback snapshot until a Pages runtime is configured.
 
-Before the site accepts orders, configure a separate server-side order integration, a real admin authentication boundary, and the agreed order fields/statuses. Prefer a separate `網站訂單` tab rather than altering the legacy order tab; confirm that target before the first live write. Confirm the displayed currency, current prices, and fulfillment rules before public launch.
+Before the site accepts orders, configure a separate server-side order integration, a real admin authentication boundary, and the agreed order fields/statuses. Website orders now append to the legacy `Orders` tab in the matching 8-column layout (see below). Confirm the displayed currency, current prices, and fulfillment rules before public launch.
 
 ## Data and privacy
 
@@ -58,31 +58,28 @@ The storefront list comes only from the `Products` sheet: every row whose column
 
 Every listed bean asks for a roast before it can be added: `淺焙`, `中焙`, or `深焙`. The same bean with a different roast is a separate cart line, and the roast can be changed in the cart. `/api/orders` requires `roastLevel` on each item and rejects a missing or any other value. The Pages Function forwards that value to the Apps Script bridge.
 
-### 網站訂單 column layout
+### Order sheet target (Orders tab)
 
-Roast is written **inside the existing column F (商品明細)** on each item line. Columns A–M are unchanged, and no new column is appended:
+Website orders are appended to the **`Orders`** tab of the spreadsheet 「老邱自家烘焙 gemini」 (`1BxRlCcvVjLYEdhyIt2B7969k2i-kXKfwvviPFhLUi_g`), the same tab that holds the historical orders from the older site. That tab has **no header row** and 8 columns; new rows follow the same layout so they line up with the old ones:
 
 | Column | Contents |
 | --- | --- |
-| A | 訂單編號 |
-| B | 下單時間 |
-| C | 顧客姓名 |
-| D | 電話 |
-| E | 配送方式 |
-| F | 商品明細, now including 烘焙度 on every line |
-| G | 超商門市 |
-| H | 備註 |
-| I | 小計 |
-| J | 運費 |
-| K | 總額 |
-| L | 狀態（待聯絡） |
-| M | 保存政策 |
+| A | 訂單編號 (website ids look like `QC-20261018-A1B2C3D4`; old ones `ORD-MMDD-HHMMSS`) |
+| B | 下單時間 (date, format `yyyy/mm/dd h:mm:ss`) |
+| C | 姓名 |
+| D | 電話 (stored as text) |
+| E | `自取` or `超商取貨` |
+| F | 品項, one line per item: `【品名】 烘焙度 / 規格 x數量` |
+| G | 總額 (including the NT$60 convenience-store shipping) |
+| H | 超商門市 for 超商取貨, plus the customer note (`備註：…` on its own line when both exist) |
 
-One item line looks like: `【衣索比亞 古吉】半磅 × 2｜淺焙｜單價 NT$350｜小計 NT$700`. The owner notification email (MailApp) uses the same lines, so each item includes its roast.
+Example row: `QC-20261018-A1B2C3D4 | 2026/10/18 13:30:00 | 王小明 | 0912345678 | 自取 | 【衣索比亞 金寶藝妓 水洗】 淺焙 / 半磅 x1 | 350 | 下午來拿`.
+
+Subtotal, shipping, status and retention-policy columns are no longer written to the sheet. The owner notification email (MailApp) keeps the full detail: each item with roast, unit price and line total, plus subtotal, shipping and total.
 
 ### Redeploy OrderBridge.gs
 
-`apps-script/OrderBridge.gs` changed. Roast will not appear in the sheet or the owner email until the script in the Apps Script editor is replaced and the **existing** web app deployment is updated (same URL):
+`apps-script/OrderBridge.gs` changed. Orders keep going to the old sheet until the script in the Apps Script editor is replaced and the **existing** web app deployment is updated (same URL):
 
 1. Open the Apps Script project and replace the whole `OrderBridge.gs` contents with the file from this repo.
 2. Deploy → Manage deployments → edit the current deployment → Version: New version → Deploy.
